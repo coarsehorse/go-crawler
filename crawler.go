@@ -93,6 +93,14 @@ func parsePage(url string) (CrawledPage, error) {
 			crawledPage.Links = append(crawledPage.Links, link)
 		}
 	})
+	// Extend relative links
+	foo := make([]string, 0, len(crawledPage.Links))
+	for _, link := range crawledPage.Links {
+		if extendedLink, err := extendRelativeLink(link, url); err == nil {
+			foo = append(foo, extendedLink)
+		}
+	}
+	crawledPage.Links = foo
 
 	// Grab hreflangs
 	doc.Find("link[rel *= 'alternate']").Each(func(i int, s *goquery.Selection) {
@@ -108,8 +116,13 @@ func parsePage(url string) (CrawledPage, error) {
 
 		hreflang = strings.TrimSpace(hreflang)
 		href = strings.TrimSpace(href)
+		href, err = extendRelativeLink(href, url)
+		if err != nil {
+			panic(err.Error())
+		}
 
 		crawledPage.HreflangUrlMap[hreflang] = href
+		crawledPage.Links = append(crawledPage.Links, href)
 	})
 
 	// Grab imgs
@@ -124,14 +137,31 @@ func parsePage(url string) (CrawledPage, error) {
 	// Grab canonical url
 	canonicalUrl, exists := doc.Find("link[rel *= 'canonical']").Eq(0).Attr("href")
 	if exists {
-		canonicalUrl = strings.TrimSpace(canonicalUrl)
+		canonicalUrl, err = extendRelativeLink(strings.TrimSpace(canonicalUrl), url)
+		if err != nil {
+			panic(err.Error())
+		}
 		crawledPage.CanonicalUrl = canonicalUrl
+		crawledPage.Links = append(crawledPage.Links, canonicalUrl)
 	}
 
 	// Grab noindex
 	_, exists = doc.Find("meta[content *= 'noindex']").Eq(0).Attr("content")
 	if exists {
 		crawledPage.NoIndex = true
+	}
+
+	// Checking pagination pattern
+	r := regexp.MustCompile(`^((http|https):\/\/.*\/)(page|p)\/\d+\/$`)
+	if paginationRootMatched := r.FindStringSubmatch(url); paginationRootMatched != nil {
+		paginationRoot := addFollowingSlash(paginationRootMatched[1])
+		crawledPage.Links = append(crawledPage.Links, paginationRoot)
+	}
+
+	// Checking get parameters pattern
+	if strings.Contains(url, `?`) {
+		withoutGet := addFollowingSlash(strings.Split(url, `?`)[0])
+		crawledPage.Links = append(crawledPage.Links, withoutGet)
 	}
 
 	return crawledPage, nil
@@ -196,15 +226,6 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	foo := make([]string, 0, len(nextLevelLinks))
 	for _, link := range nextLevelLinks {
 		foo = append(foo, addFollowingSlash(link))
-	}
-	nextLevelLinks = foo
-
-	// Extend relative links
-	foo = make([]string, 0, len(nextLevelLinks))
-	for _, link := range nextLevelLinks {
-		if extendedLink, err := extendRelativeLink(link, linksToCrawl[0]); err == nil {
-			foo = append(foo, extendedLink)
-		}
 	}
 	nextLevelLinks = foo
 
