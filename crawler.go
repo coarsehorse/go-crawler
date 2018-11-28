@@ -406,6 +406,21 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 	return "", errors.New("Can't parse relative link: \"" + relativeLink + "\"")
 }
 
+func extractUniqueLinks(levels []CrawledLevel) (uniqueLinks []string) {
+	uniqueLinksMap := make(map[string]struct{})
+
+	for _, lvl := range levels {
+		for _, page := range lvl.CrawledPages {
+			uniqueLinksMap[page.Url] = struct{}{}
+		}
+	}
+	for k, _ := range uniqueLinksMap {
+		uniqueLinks = append(uniqueLinks, k)
+	}
+
+	return uniqueLinks
+}
+
 func main() {
 	//url := "https://beteastsports.com/"
 	url := "https://ampmlimo.ca/"
