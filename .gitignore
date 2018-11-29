@@ -1,3 +1,5 @@
 .idea/
 result*/
+log*.txt
+log*.log
 db_credentials.json

@@ -35,11 +35,11 @@ type CrawlingTask struct {
 }
 
 type DBCredentials struct {
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	Host_address string `json:"host_address"`
-	Port         int    `json:"port"`
-	Db_name      string `json:"db_name"`
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	HostAddress string `json:"host_address"`
+	Port        int    `json:"port"`
+	DbName      string `json:"db_name"`
 }
 
 func checkErr(err error) {
@@ -72,8 +72,8 @@ func getConnection() (conn *sql.DB, err error) {
 
 	// Open connection
 	conn, err = sql.Open("mysql",
-		cred.Username+":"+cred.Password+"@tcp("+cred.Host_address+":"+
-			strconv.Itoa(cred.Port)+")/"+cred.Db_name+"?charset=utf8")
+		cred.Username+":"+cred.Password+"@tcp("+cred.HostAddress+":"+
+			strconv.Itoa(cred.Port)+")/"+cred.DbName+"?charset=utf8")
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +122,7 @@ func updateById(task CrawlingTask, conn *sql.DB) (err error) {
 }
 
 func main() {
+	fmt.Println("Starting...")
 	connection, err := getConnection()
 	checkErr(err)
 

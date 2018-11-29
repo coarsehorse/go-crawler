@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,11 +12,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	//"utils/utils"
 )
 
 const (
 	RESULTS_DIR   = "RESULTS"
 	GORUTINES_NUM = 32
+	LOG_FILENAME  = "log.log"
 )
 
 type CrawledPage struct {
@@ -35,24 +37,42 @@ type CrawledLevel struct {
 	CrawledPages []CrawledPage `json:"crawledPages"`
 }
 
+func notifyAboutUrlWithTime(url string, startTime time.Time, error bool, statusCode string) {
+	// Construct notification
+	executionTime := time.Now().Sub(startTime).Nanoseconds() / 1E+6
+	message := ""
+
+	if error {
+		message += "ERROR\t"
+	} else {
+		message += statusCode + "\t"
+	}
+	message += "Parsed by " + strconv.FormatInt(executionTime, 10) + " ms\t"
+	message += "url: " + url
+
+	log.Print(message)
+}
+
 func parsePage(url string) (CrawledPage, error) {
+	// Check the time
+	start := time.Now()
+
 	// Ensure url is ok
 	url = addFollowingSlash(url)
 
 	// Get page by url
-	//start := time.Now()
 	resp, err := http.Get(url)
-	//executionTime := time.Now().Sub(start).Nanoseconds() / 10E+6 // ms
-	//fmt.Printf("Downloaded by: %v ms\n", executionTime)
 
 	// Handle response errors
 	if err != nil {
+		notifyAboutUrlWithTime(url, start, true, "")
 		errMessage := "Failed to crawl1 " + url + " with error: \"" + err.Error() + "\""
 		return CrawledPage{}, errors.New(errMessage)
 	}
 
 	// Handle not 200 status
 	if resp.StatusCode != 200 {
+		notifyAboutUrlWithTime(url, start, false, resp.Status)
 		errMessage := "Failed to crawl1 " + url + " with error: \"Not 200 status code(" + strconv.Itoa(resp.StatusCode) + ")\""
 		return CrawledPage{}, errors.New(errMessage)
 	}
@@ -164,10 +184,13 @@ func parsePage(url string) (CrawledPage, error) {
 		crawledPage.Links = append(crawledPage.Links, withoutGet)
 	}
 
+	notifyAboutUrlWithTime(url, start, false, resp.Status)
+
 	return crawledPage, nil
 }
 
 func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
+	log.Print("Starting crawl ", len(linksToCrawl), " links")
 	notGotPages := 0
 	crawledPages := make([]CrawledPage, 0)
 	for _, link := range linksToCrawl {
@@ -179,7 +202,7 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		}
 		crawledLinks = append(crawledLinks, link)
 	}
-	fmt.Printf("Expected to be crawled: %v, not crawled: %v\n", len(linksToCrawl), notGotPages)
+	log.Print("Crawled with error ", notGotPages, "/", len(linksToCrawl), " links")
 
 	// Add the new crawled level to crawledLevels
 	var lastLevelNum int
@@ -299,7 +322,7 @@ func extractDomain(url string) string {
 // date - current date in format dd-MM-YYYY-HH-mm-ss
 // ext - future file extension, leading dot is needed(.json, .jpg)
 // Returns the *File pointer on the created file or nil on error + optional error
-func createUniqResultFile(url string, ext string) (createdFile *os.File, err error) {
+func createUniqResultingFile(url string, ext string) (createdFile *os.File, err error) {
 	domain := extractDomain(url)
 	t := time.Now()
 	date := t.Format("2-1-2006-15-04-05") // get datetime in string(dd-MM-YYYY-HH-mm-ss)
@@ -307,8 +330,9 @@ func createUniqResultFile(url string, ext string) (createdFile *os.File, err err
 	if err != nil {
 		return nil, err
 	}
-	_ = os.MkdirAll(filepath.Join(curDir, RESULTS_DIR), os.ModePerm)    // create results dir
-	fileName := filepath.Join(curDir, RESULTS_DIR, domain+"-"+date+ext) // create res file absolute path
+	_ = os.MkdirAll(filepath.Join(curDir, RESULTS_DIR), os.ModePerm) // create results dir
+
+	fileName := filepath.Join(curDir, RESULTS_DIR, domain+"-"+date+ext) // absolute path for resulting file
 	createdFile, err = os.Create(fileName)
 	if err != nil {
 		return nil, err
@@ -421,54 +445,59 @@ func extractUniqueLinks(levels []CrawledLevel) (uniqueLinks []string) {
 	return uniqueLinks
 }
 
+func checkError(err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func main() {
-	//url := "https://beteastsports.com/"
-	url := "https://ampmlimo.ca/"
+	// Input variations
+	url := "https://beteastsports.com/"
+	//url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
 	//url := "https://mediglobus.com/"
 	//url := "http://example.com/"
 
-	// Create unique backup file for future result
-	file, err := createUniqResultFile(url, ".json")
+	// Initialize logger
+	logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
-		panic(err.Error())
+		log.Fatal(err)
 	}
+	log.SetOutput(logFilename)
 
-	start := time.Now() // check time
+	// Check time
+	start := time.Now()
 
-	//crawledPage, _ := parsePage(url)
+	// Crawl specified url
 	crawledLevels := crawl([]string{url}, []string{}, []CrawledLevel{})
 
-	executionTime := time.Now().Sub(start).Nanoseconds() / 1E+6 // get execution time in ms
+	// Get execution time in ms
+	executionTime := time.Now().Sub(start).Nanoseconds() / 1E+6
 
-	//fmt.Printf("Crawled levels: %v\n", crawledPage)
-	//fmt.Printf("Crawled levels: %v\n", crawledLevels)
-
+	// Marshal result
 	marshaled, err := json.MarshalIndent(crawledLevels, "", "\t") // marshal to json with indents
-	if err != nil {
-		panic(err.Error())
-	}
+	checkError(err)
 
-	err = writeToFileAndClose(file, marshaled) // write out result
-	if err != nil {
-		panic(err.Error())
-	}
+	// Create unique backup file
+	file, err := createUniqResultingFile(url, ".json")
+	checkError(err)
 
-	// Check res
+	// Write out result
+	err = writeToFileAndClose(file, marshaled)
+	checkError(err)
+
+	// Create the file for crawled links only file
 	crawledLinks := make([]string, 0)
 	for _, lvl := range crawledLevels {
 		for _, page := range lvl.CrawledPages {
 			crawledLinks = append(crawledLinks, page.Url)
 		}
 	}
-	f, e := createUniqResultFile(url, "-GO-.txt")
-	if e != nil {
-		panic(e.Error())
-	}
-	e = writeToFileAndClose(f, []byte(strings.Join(crawledLinks, "\n")))
-	if e != nil {
-		panic(e.Error())
-	}
+	f, err := createUniqResultingFile(url, "-links-only.txt")
+	checkError(err)
+	err = writeToFileAndClose(f, []byte(strings.Join(crawledLinks, "\n")))
+	checkError(err)
 
-	fmt.Printf("Execution time: %v ms\n", executionTime)
+	log.Println("Execution time: ", executionTime, " ms")
 }
