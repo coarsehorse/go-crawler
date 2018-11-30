@@ -1,24 +1,19 @@
-package main
+package crawler
 
 import (
-	"encoding/json"
 	"errors"
 	"github.com/PuerkitoBio/goquery"
+	"goCrawler/utils"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
-	//"utils/utils"
 )
 
 const (
-	RESULTS_DIR   = "RESULTS"
 	GORUTINES_NUM = 32
-	LOG_FILENAME  = "log.log"
 )
 
 type CrawledPage struct {
@@ -37,28 +32,12 @@ type CrawledLevel struct {
 	CrawledPages []CrawledPage `json:"crawledPages"`
 }
 
-func notifyAboutUrlWithTime(url string, startTime time.Time, error bool, statusCode string) {
-	// Construct notification
-	executionTime := time.Now().Sub(startTime).Nanoseconds() / 1E+6
-	message := ""
-
-	if error {
-		message += "ERROR\t"
-	} else {
-		message += statusCode + "\t"
-	}
-	message += "Parsed by " + strconv.FormatInt(executionTime, 10) + " ms\t"
-	message += "url: " + url
-
-	log.Print(message)
-}
-
-func parsePage(url string) (CrawledPage, error) {
+func ParsePage(url string) (CrawledPage, error) {
 	// Check the time
 	start := time.Now()
 
 	// Ensure url is ok
-	url = addFollowingSlash(url)
+	url = utils.AddFollowingSlash(url)
 
 	// Get page by url
 	resp, err := http.Get(url)
@@ -70,7 +49,7 @@ func parsePage(url string) (CrawledPage, error) {
 		return CrawledPage{}, errors.New(errMessage)
 	}
 
-	// Handle not 200 status
+	// Handle not 200 status of original query or last redirect
 	if resp.StatusCode != 200 {
 		notifyAboutUrlWithTime(url, start, false, resp.Status)
 		errMessage := "Failed to crawl1 " + url + " with error: \"Not 200 status code(" + strconv.Itoa(resp.StatusCode) + ")\""
@@ -79,7 +58,6 @@ func parsePage(url string) (CrawledPage, error) {
 
 	// Create goquery Document
 	respBodyReader := resp.Body
-	defer respBodyReader.Close()
 	doc, err := goquery.NewDocumentFromReader(respBodyReader)
 	if err != nil {
 		errMessage := "Failed to create goquery Document from " + url + " with error: \"" + err.Error() + "\""
@@ -92,8 +70,9 @@ func parsePage(url string) (CrawledPage, error) {
 
 	/* Find data */
 
-	// Fill url
-	crawledPage.Url = url
+	// Grab url
+	// Get original url or the last redirect
+	crawledPage.Url = utils.AddFollowingSlash(strings.TrimSpace(resp.Request.URL.String()))
 
 	// Grab title
 	title := doc.Find("title").Eq(0).Text()
@@ -159,7 +138,7 @@ func parsePage(url string) (CrawledPage, error) {
 	if exists {
 		canonicalUrl, err = extendRelativeLink(strings.TrimSpace(canonicalUrl), url)
 		if err != nil {
-			panic(err.Error())
+			return CrawledPage{}, err
 		}
 		crawledPage.CanonicalUrl = canonicalUrl
 		crawledPage.Links = append(crawledPage.Links, canonicalUrl)
@@ -174,33 +153,42 @@ func parsePage(url string) (CrawledPage, error) {
 	// Checking pagination pattern
 	r := regexp.MustCompile(`^((http|https):\/\/.*\/)(page|p)\/\d+\/$`)
 	if paginationRootMatched := r.FindStringSubmatch(url); paginationRootMatched != nil {
-		paginationRoot := addFollowingSlash(paginationRootMatched[1])
+		paginationRoot := utils.AddFollowingSlash(paginationRootMatched[1])
 		crawledPage.Links = append(crawledPage.Links, paginationRoot)
 	}
 
 	// Checking get parameters pattern
 	if strings.Contains(url, `?`) {
-		withoutGet := addFollowingSlash(strings.Split(url, `?`)[0])
+		withoutGet := utils.AddFollowingSlash(strings.Split(url, `?`)[0])
 		crawledPage.Links = append(crawledPage.Links, withoutGet)
 	}
 
 	notifyAboutUrlWithTime(url, start, false, resp.Status)
 
+	// Cleanup
+	err = respBodyReader.Close()
+	if err != nil {
+		return CrawledPage{}, err
+	}
+
 	return crawledPage, nil
 }
 
-func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
+func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
 	log.Print("Starting crawl ", len(linksToCrawl), " links")
 	notGotPages := 0
 	crawledPages := make([]CrawledPage, 0)
 	for _, link := range linksToCrawl {
-		page, err := parsePage(link)
+		page, err := ParsePage(link)
 		if err != nil {
 			notGotPages++
 		} else {
 			crawledPages = append(crawledPages, page)
 		}
 		crawledLinks = append(crawledLinks, link)
+		if link != page.Url { // if request was redirected
+			crawledLinks = append(crawledLinks, page.Url)
+		}
 	}
 	log.Print("Crawled with error ", notGotPages, "/", len(linksToCrawl), " links")
 
@@ -217,7 +205,7 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	})
 
 	// Unique crawledLinks
-	crawledLinks = uniqueStringSlice(crawledLinks)
+	crawledLinks = utils.UniqueStringSlice(crawledLinks)
 
 	// Collect and unique all links from crawled pages
 	nextLevelLinksMap := make(map[string]struct{}, 0)
@@ -232,7 +220,7 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		nextLevelLinks = append(nextLevelLinks, k)
 	}
 	// Filter out bad links(tel:, mailto:, #, etc.)
-	nextLevelLinks = filterSlice(nextLevelLinks, func(link string) bool {
+	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
 		if link == "" || link == "#" {
 			return false
 		} else if strings.HasPrefix(link, "tel:") ||
@@ -248,21 +236,21 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	// Add following "/"
 	foo := make([]string, 0, len(nextLevelLinks))
 	for _, link := range nextLevelLinks {
-		foo = append(foo, addFollowingSlash(link))
+		foo = append(foo, utils.AddFollowingSlash(link))
 	}
 	nextLevelLinks = foo
 
 	// Remove duplicates
-	nextLevelLinks = uniqueStringSlice(nextLevelLinks)
+	nextLevelLinks = utils.UniqueStringSlice(nextLevelLinks)
 
 	// Validate with domain pattern
-	domain := extractDomain(linksToCrawl[0])
+	domain := utils.ExtractDomain(linksToCrawl[0])
 	domainPattern := `^(http|https):\/\/` + strings.Replace(domain, `.`, `\.`, -1) + `.*$`
 	r, err := regexp.Compile(domainPattern)
 	if err != nil {
 		panic("Bad regexp constructed for links validation: \"" + domainPattern + "\"")
 	}
-	nextLevelLinks = filterSlice(nextLevelLinks, func(link string) bool {
+	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
 		return r.MatchString(link) // check domain domainPattern
 	})
 
@@ -283,89 +271,8 @@ func crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	if len(remainingLinks) == 0 { // crawling is done
 		return crawledLevels
 	} else {
-		return crawl(remainingLinks, crawledLinks, crawledLevels) // crawl next level
+		return Crawl(remainingLinks, crawledLinks, crawledLevels) // crawl next level
 	}
-}
-
-func uniqueStringSlice(initialSlice []string) []string {
-	fooMap := make(map[string]struct{}, len(initialSlice))
-	for _, str := range initialSlice {
-		fooMap[str] = struct{}{}
-	}
-	uniqueSlice := make([]string, 0, len(fooMap))
-	for k := range fooMap {
-		uniqueSlice = append(uniqueSlice, k)
-	}
-
-	return uniqueSlice
-}
-
-func filterSlice(slice []string, predicate func(string) bool) (filtered []string) {
-	for _, s := range slice {
-		if predicate(s) {
-			filtered = append(filtered, s)
-		}
-	}
-	return
-}
-
-func extractDomain(url string) string {
-	return strings.Split(url, "/")[2]
-}
-
-// Creates the new result file.
-// Filename mask: curDir + RESULTS_DIR + domain + date + ext.
-// Where:
-// curDir - current dir of execution,
-// RESULTS_DIR - constant, represents name of directory with results
-// domain - extracted url domain
-// date - current date in format dd-MM-YYYY-HH-mm-ss
-// ext - future file extension, leading dot is needed(.json, .jpg)
-// Returns the *File pointer on the created file or nil on error + optional error
-func createUniqResultingFile(url string, ext string) (createdFile *os.File, err error) {
-	domain := extractDomain(url)
-	t := time.Now()
-	date := t.Format("2-1-2006-15-04-05") // get datetime in string(dd-MM-YYYY-HH-mm-ss)
-	curDir, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-	_ = os.MkdirAll(filepath.Join(curDir, RESULTS_DIR), os.ModePerm) // create results dir
-
-	fileName := filepath.Join(curDir, RESULTS_DIR, domain+"-"+date+ext) // absolute path for resulting file
-	createdFile, err = os.Create(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	return createdFile, nil
-}
-
-// Writes data to the already created file with error handling
-// and closing opened file after writing
-// Returns the possible error or nil on success
-func writeToFileAndClose(file *os.File, data []byte) error {
-	_, err := file.Write(data) // write out result
-	if err != nil {
-		return err
-	}
-	err = file.Sync()
-	if err != nil {
-		return err
-	}
-	err = file.Close()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func addFollowingSlash(str string) string {
-	if chars := strings.Split(str, ""); chars[len(chars)-1] != "/" {
-		return str + "/"
-	}
-	return str
 }
 
 func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absoluteUrl string, err error) {
@@ -375,13 +282,13 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 	}
 
 	// To bee sure that input URLs has trailing '/'
-	relativeLink = addFollowingSlash(relativeLink)
-	linkAbsoluteLocation = addFollowingSlash(linkAbsoluteLocation)
+	relativeLink = utils.AddFollowingSlash(relativeLink)
+	linkAbsoluteLocation = utils.AddFollowingSlash(linkAbsoluteLocation)
 
 	// Common data for the all cases
 	absoluteSplitted := strings.Split(linkAbsoluteLocation, `/`)
 	protocol := absoluteSplitted[0] + "//"
-	domain := addFollowingSlash(extractDomain(linkAbsoluteLocation))
+	domain := utils.AddFollowingSlash(utils.ExtractDomain(linkAbsoluteLocation))
 
 	// Case /
 	if relativeLink == `/` { // root
@@ -422,7 +329,7 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 				linkAbsoluteLocation)
 		} else {
 			newAbsoluteSplitted := absoluteSplitted[:len(absoluteSplitted)-2] // -2 because we have following /
-			newAbsolute := addFollowingSlash(strings.Join(newAbsoluteSplitted, "/"))
+			newAbsolute := utils.AddFollowingSlash(strings.Join(newAbsoluteSplitted, "/"))
 			return newAbsolute + newRelativePart, nil
 		}
 	}
@@ -430,7 +337,7 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 	return "", errors.New("Can't parse relative link: \"" + relativeLink + "\"")
 }
 
-func extractUniqueLinks(levels []CrawledLevel) (uniqueLinks []string) {
+func ExtractUniqueLinks(levels []CrawledLevel) (uniqueLinks []string) {
 	uniqueLinksMap := make(map[string]struct{})
 
 	for _, lvl := range levels {
@@ -445,59 +352,18 @@ func extractUniqueLinks(levels []CrawledLevel) (uniqueLinks []string) {
 	return uniqueLinks
 }
 
-func checkError(err error) {
-	if err != nil {
-		log.Fatal(err)
+func notifyAboutUrlWithTime(url string, startTime time.Time, error bool, statusCode string) {
+	// Construct notification
+	executionTime := time.Now().Sub(startTime).Nanoseconds() / 1E+6
+	message := ""
+
+	if error {
+		message += "\tERROR\t"
+	} else {
+		message += "\t" + statusCode + "\t"
 	}
-}
+	message += "Parsed by " + strconv.FormatInt(executionTime, 10) + " ms\t"
+	message += "url: " + url
 
-func main() {
-	// Input variations
-	url := "https://beteastsports.com/"
-	//url := "https://ampmlimo.ca/"
-	//url := "https://www.polygon.com/playstation"
-	//url := "https://mediglobus.com/"
-	//url := "http://example.com/"
-
-	// Initialize logger
-	logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetOutput(logFilename)
-
-	// Check time
-	start := time.Now()
-
-	// Crawl specified url
-	crawledLevels := crawl([]string{url}, []string{}, []CrawledLevel{})
-
-	// Get execution time in ms
-	executionTime := time.Now().Sub(start).Nanoseconds() / 1E+6
-
-	// Marshal result
-	marshaled, err := json.MarshalIndent(crawledLevels, "", "\t") // marshal to json with indents
-	checkError(err)
-
-	// Create unique backup file
-	file, err := createUniqResultingFile(url, ".json")
-	checkError(err)
-
-	// Write out result
-	err = writeToFileAndClose(file, marshaled)
-	checkError(err)
-
-	// Create the file for crawled links only file
-	crawledLinks := make([]string, 0)
-	for _, lvl := range crawledLevels {
-		for _, page := range lvl.CrawledPages {
-			crawledLinks = append(crawledLinks, page.Url)
-		}
-	}
-	f, err := createUniqResultingFile(url, "-links-only.txt")
-	checkError(err)
-	err = writeToFileAndClose(f, []byte(strings.Join(crawledLinks, "\n")))
-	checkError(err)
-
-	log.Println("Execution time: ", executionTime, " ms")
+	log.Print(message)
 }

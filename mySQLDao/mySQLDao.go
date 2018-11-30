@@ -1,20 +1,17 @@
-package main
+package mySQLDao
 
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"os"
-	"sort"
 	"strconv"
-	"strings"
-	"time"
 )
 
 const (
 	CRAWLING_TASK_TABLE     = "crawling_task"
+	ESTIMATOR_TABLE         = "estimator"
 	DB_CREDENTIALS_FILENAME = "db_credentials.json"
 )
 
@@ -34,6 +31,16 @@ type CrawlingTask struct {
 	CrawledLinks sql.NullString `json:"crawled_links"`
 }
 
+type Estimation struct {
+	Id              int            `json:"id"`
+	Url             string         `json:"url"`
+	CrawledPagesNum sql.NullInt64  `json:"crawled_pages_num"`
+	StartDate       string         `json:"start_date"`
+	EndDate         sql.NullString `json:"end_date"`
+	CrawlingTime    sql.NullInt64  `json:"crawling_time"`
+	ResultsLink     string         `json:"results_link"`
+}
+
 type DBCredentials struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
@@ -42,13 +49,7 @@ type DBCredentials struct {
 	DbName      string `json:"db_name"`
 }
 
-func checkErr(err error) {
-	if err != nil {
-		panic(err.Error())
-	}
-}
-
-func getConnection() (conn *sql.DB, err error) {
+func GetConnection() (conn *sql.DB, err error) {
 	// Open json file with credentials
 	jsonFile, err := os.Open(DB_CREDENTIALS_FILENAME)
 	if err != nil {
@@ -81,7 +82,7 @@ func getConnection() (conn *sql.DB, err error) {
 	return conn, nil
 }
 
-func getActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
+func GetActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 	// Select all active tasks
 	activeTasks = make([]CrawlingTask, 0)
 	tasks, err := conn.Query("SELECT * FROM " + CRAWLING_TASK_TABLE + " WHERE `hidden` IS FALSE")
@@ -101,7 +102,7 @@ func getActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 	return activeTasks, nil
 }
 
-func updateById(task CrawlingTask, conn *sql.DB) (err error) {
+func UpdateCrawlingTaskById(task CrawlingTask, conn *sql.DB) (err error) {
 	stmt, err := conn.Prepare("UPDATE " + CRAWLING_TASK_TABLE + " SET " +
 		"id_estimator=?," +
 		"url=?," +
@@ -121,42 +122,21 @@ func updateById(task CrawlingTask, conn *sql.DB) (err error) {
 	return nil
 }
 
-func main() {
-	fmt.Println("Starting...")
-	connection, err := getConnection()
-	checkErr(err)
-
-	for {
-		// Get current tasks
-		activeTasks, err := getActiveTasks(connection)
-		checkErr(err)
-
-		// Sort by id(less id - added earlier)
-		sort.Slice(activeTasks[:], func(i, j int) bool {
-			return activeTasks[i].Id < activeTasks[j].Id
-		})
-		for _, task := range activeTasks {
-			if task.Status == IN_QUEUE {
-				// Update status
-				task.Status = IN_PROGRESS
-				err = updateById(task, connection)
-				checkErr(err)
-				fmt.Println("Updated: ", task.Id, " with status: ", task.Status)
-
-				// Perform a task
-				crawledLevels := crawl([]string{task.Url}, []string{}, []CrawledLevel{})
-				crawledLinks := extractUniqueLinks(crawledLevels)
-
-				// Update task with results
-				task.Status = DONE
-				task.CrawledLinks.Valid = true
-				task.CrawledLinks.String = strings.Join(crawledLinks, "\n")
-				err = updateById(task, connection)
-				checkErr(err)
-				fmt.Println("Updated: ", task.Id, " with status: ", task.Status)
-			}
-		}
-
-		time.Sleep(3 * time.Second)
+func UpdateEstimatorById(id int, crawledPagesNum sql.NullInt64, endDate sql.NullString,
+	crawlingTime sql.NullInt64, conn *sql.DB) (err error) {
+	stmt, err := conn.Prepare("UPDATE " + ESTIMATOR_TABLE + " SET " +
+		"crawled_pages_num=?, " +
+		"end_date=?, " +
+		"crawling_time=? " +
+		"WHERE id=?")
+	if err != nil {
+		return err
 	}
+
+	_, err = stmt.Exec(crawledPagesNum, endDate, crawlingTime, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

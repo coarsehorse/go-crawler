@@ -1,11 +1,11 @@
 package main
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"goCrawler/mySQLDao"
+	"goCrawler/utils"
 	"io/ioutil"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -15,17 +15,18 @@ import (
 /*
 create table analitycs
 (
-	id int not null autoincrement,
+	id int not null AUTO_INCREMENT,
 	status int null,
 	time_ms int null,
-	url varchar(100) null,
+	url varchar(1000) null,
 	constraint analitycs_pk
 		primary key (id)
 );
 */
 
 const (
-	DB_TABLE_NAME = "analytics"
+	DB_TABLE_NAME = "analytics1"
+	LOG_FILENAME  = "log_part.log"
 )
 
 type CrawlingStats struct {
@@ -34,52 +35,20 @@ type CrawlingStats struct {
 	Url    string
 }
 
-type DBCredentials struct {
-	Username     string `json:"username"`
-	Password     string `json:"password"`
-	Host_address string `json:"host_address"`
-	Port         int    `json:"port"`
-	Db_name      string `json:"db_name"`
-}
-
 func main() {
 	start := time.Now()
-	// Open json file with credentials
-	jsonFile, err := os.Open("db_credentials.json")
-	if err != nil {
-		panic(err.Error())
-	}
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-
-	// Unmarshal data
-	var cred DBCredentials
-	err = json.Unmarshal(byteValue, &cred)
-	if err != nil {
-		panic(err.Error())
-	}
-
-	// Close opened credentials file
-	err = jsonFile.Close()
-	if err != nil {
-		panic(err.Error())
-	}
 
 	// Open connection
-	conn, err := sql.Open("mysql",
-		cred.Username+":"+cred.Password+"@tcp("+cred.Host_address+":"+
-			strconv.Itoa(cred.Port)+")/"+cred.Db_name+"?charset=utf8")
-	if err != nil {
-		panic(err.Error())
-	}
+	conn, err := mySQLDao.GetConnection()
+	utils.CheckError(err)
 
 	// Read logs and upload data
-	logsFile, err := os.Open("log.txt")
+	logsFile, err := os.Open(LOG_FILENAME)
 	if err != nil {
 		panic(err.Error())
 	}
 
-	byteValue, _ = ioutil.ReadAll(logsFile)
+	byteValue, _ := ioutil.ReadAll(logsFile)
 	logsStr := string(byteValue)
 
 	err = logsFile.Close()
@@ -89,31 +58,61 @@ func main() {
 
 	logs := strings.Split(logsStr, "\n")
 
+	temp1 := logs[len(logs)-20 : len(logs)]
+	log.Print(strings.Join(temp1[:2], "\n"))
+
+	batch := make([]string, 0, len(logs))
+
+	// Construct batch of SQL requests
 	for _, s := range logs {
-		if s == "" {
+		if s == "" || // skip not valid strings
+			strings.Contains(s, "Starting crawl ") ||
+			strings.Contains(s, "Crawled with error ") ||
+			strings.Contains(s, "Crawled with error ") {
 			continue
 		}
+
 		stat := CrawlingStats{}
-		stat.Status, err = strconv.Atoi(strings.Split(s, " ")[0])
-		if err != nil {
-			panic(err.Error())
-		}
-		stat.TimeMs, err = strconv.Atoi(strings.Split(strings.Split(s, "Parsed by ")[1], " ")[0])
-		if err != nil {
-			panic(err.Error())
-		}
-		spl := strings.Split(s, "url: ")
-		stat.Url = spl[len(spl)-1]
+		tabs := strings.Split(s, "\t")
 
-		_, err = conn.Exec("INSERT INTO " + DB_TABLE_NAME +
-			" (status, time_ms, url) VALUE (" + strconv.Itoa(stat.Status) + ", " + strconv.Itoa(stat.TimeMs) + ", '" + stat.Url + "')")
-		if err != nil {
-			panic(err.Error())
+		// Treat error as 0 status
+		if strings.Contains(tabs[1], "ERROR") {
+			tabs[1] = "0"
 		}
 
-		fmt.Println("Uploaded " + stat.Url)
+		stat.Status, err = strconv.Atoi(strings.Split(tabs[1], " ")[0])
+		if err != nil {
+			panic(err.Error())
+		}
+		stat.TimeMs, err = strconv.Atoi(strings.Split(tabs[2], " ")[2])
+		if err != nil {
+			panic(err.Error())
+		}
+
+		stat.Url = strings.Split(tabs[3], "url: ")[1]
+
+		batch = append(batch, "("+strconv.Itoa(stat.Status)+
+			", "+strconv.Itoa(stat.TimeMs)+", '"+stat.Url+"')")
 	}
-	fmt.Print("Done by ")
-	fmt.Print(time.Now().Sub(start).Nanoseconds() / 1E+6)
-	fmt.Println(" ms")
+
+	batchHeader := "INSERT INTO " + DB_TABLE_NAME +
+		" (status, time_ms, url) VALUES "
+
+	chunkSize := 500
+	// Perform batch inserts
+	for i := 0; i < len(batch); i += chunkSize {
+		end := i + chunkSize
+		if end > len(batch) {
+			end = len(batch)
+		}
+
+		fooBatch := strings.Join(batch[i:end], ", ")
+		_, err = conn.Exec(batchHeader + fooBatch)
+		if err != nil {
+			panic(err.Error())
+		}
+		log.Print("Uploaded data[", i, ":", end, "]")
+	}
+
+	log.Print("Done by ", time.Now().Sub(start).Nanoseconds()/1E+6, " ms")
 }
