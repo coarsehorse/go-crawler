@@ -3,7 +3,7 @@ package crawler
 import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
-	"goCrawler/utils"
+	"go-crawler/utils"
 	"log"
 	"net/http"
 	"regexp"

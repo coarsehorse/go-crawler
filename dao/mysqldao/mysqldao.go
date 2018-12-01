@@ -1,4 +1,4 @@
-package mySQLDao
+package mysqldao
 
 import (
 	"database/sql"

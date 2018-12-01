@@ -108,9 +108,9 @@ func main() {
 	//	panic(err.Error())
 	//}
 
-	//test := []MyTest{{"asdasd", 1}, {"Two", 3}}
+	//tests := []MyTest{{"asdasd", 1}, {"Two", 3}}
 	//
-	//marshaled, err := json.MarshalIndent(test, "", "\t")
+	//marshaled, err := json.MarshalIndent(tests, "", "\t")
 	//if err != nil {
 	//	panic(err.Error())
 	//}

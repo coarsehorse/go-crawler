@@ -2,8 +2,8 @@ package main
 
 import (
 	"encoding/json"
-	"goCrawler/crawler"
-	"goCrawler/utils"
+	"go-crawler/crawler"
+	"go-crawler/utils"
 	"log"
 	"os"
 	"strings"

@@ -2,7 +2,7 @@ package main
 
 import (
 	_ "github.com/go-sql-driver/mysql"
-	"goCrawler/mySQLDao"
+	"goCrawler/dao/mysqldao"
 	"goCrawler/utils"
 	"io/ioutil"
 	"log"
@@ -13,7 +13,7 @@ import (
 )
 
 /*
-create table analitycs
+create table analytics
 (
 	id int not null AUTO_INCREMENT,
 	status int null,
@@ -39,7 +39,7 @@ func main() {
 	start := time.Now()
 
 	// Open connection
-	conn, err := mySQLDao.GetConnection()
+	conn, err := mysqldao.GetConnection()
 	utils.CheckError(err)
 
 	// Read logs and upload data

@@ -2,9 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"goCrawler/crawler"
-	"goCrawler/mySQLDao"
-	"goCrawler/utils"
+	"go-crawler/crawler"
+	"go-crawler/dao/mysqldao"
+	"go-crawler/utils"
 	"log"
 	"sort"
 	"strings"
@@ -13,12 +13,12 @@ import (
 
 func main() {
 	log.Print("Starting...")
-	connection, err := mySQLDao.GetConnection()
+	connection, err := mysqldao.GetConnection()
 	utils.CheckError(err)
 
 	for {
 		// Get current tasks
-		activeTasks, err := mySQLDao.GetActiveTasks(connection)
+		activeTasks, err := mysqldao.GetActiveTasks(connection)
 		utils.CheckError(err)
 
 		// Sort by id(less id - added earlier)
@@ -26,10 +26,10 @@ func main() {
 			return activeTasks[i].Id < activeTasks[j].Id
 		})
 		for _, task := range activeTasks {
-			if task.Status == mySQLDao.IN_QUEUE {
+			if task.Status == mysqldao.IN_QUEUE {
 				// Update status
-				task.Status = mySQLDao.IN_PROGRESS
-				err = mySQLDao.UpdateCrawlingTaskById(task, connection)
+				task.Status = mysqldao.IN_PROGRESS
+				err = mysqldao.UpdateCrawlingTaskById(task, connection)
 				utils.CheckError(err)
 				log.Print("Found new task id: ", task.Id, ", updated with status: ", task.Status)
 
@@ -43,10 +43,10 @@ func main() {
 				crawledLinks := crawler.ExtractUniqueLinks(crawledLevels)
 
 				// Update crawling task table
-				task.Status = mySQLDao.DONE
+				task.Status = mysqldao.DONE
 				task.CrawledLinks.Valid = true
 				task.CrawledLinks.String = strings.Join(crawledLinks, "\n")
-				err = mySQLDao.UpdateCrawlingTaskById(task, connection)
+				err = mysqldao.UpdateCrawlingTaskById(task, connection)
 				utils.CheckError(err)
 
 				// Update estimator table
@@ -62,7 +62,7 @@ func main() {
 					Valid:  true,
 					String: end.Format("2006-01-02 15:04:05"), // mySQL mask
 				}
-				err = mySQLDao.UpdateEstimatorById(task.IdEstimator,
+				err = mysqldao.UpdateEstimatorById(task.IdEstimator,
 					nullCrawledLinksNum, nullEndTime, nullTime, connection)
 				utils.CheckError(err)
 				log.Print("Estimator table id: ", task.IdEstimator,
