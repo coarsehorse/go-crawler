@@ -176,6 +176,14 @@ func ParsePage(url string) (CrawledPage, error) {
 
 func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
 	log.Print("Starting crawl ", len(linksToCrawl), " links")
+
+	// To be sure that all links to crawl has following '/'
+	foo := make([]string, 0, len(linksToCrawl))
+	for _, link := range linksToCrawl {
+		foo = append(foo, utils.AddFollowingSlash(link))
+	}
+	linksToCrawl = foo
+
 	notGotPages := 0
 	crawledPages := make([]CrawledPage, 0)
 	for _, link := range linksToCrawl {
@@ -233,8 +241,8 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		return true
 	})
 
-	// Add following "/"
-	foo := make([]string, 0, len(nextLevelLinks))
+	// Add the following "/"
+	foo = make([]string, 0, len(nextLevelLinks))
 	for _, link := range nextLevelLinks {
 		foo = append(foo, utils.AddFollowingSlash(link))
 	}
@@ -243,15 +251,15 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	// Remove duplicates
 	nextLevelLinks = utils.UniqueStringSlice(nextLevelLinks)
 
-	// Validate with domain pattern
+	// Validate with domain pattern, subdomains handled
 	domain := utils.ExtractDomain(linksToCrawl[0])
-	domainPattern := `^(http|https):\/\/` + strings.Replace(domain, `.`, `\.`, -1) + `.*$`
-	r, err := regexp.Compile(domainPattern)
-	if err != nil {
-		panic("Bad regexp constructed for links validation: \"" + domainPattern + "\"")
-	}
+	domainParts := strings.Split(domain, `.`)
+	domainWithoutSubdoms := strings.Join(domainParts[len(domainParts)-2:len(domainParts)], `.`)
+	domainPattern := `^https?:\/\/([-\w\d]+\.)*` + strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	r := regexp.MustCompile(domainPattern)
+
 	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
-		return r.MatchString(link) // check domain domainPattern
+		return r.MatchString(link) // validate link with domainPattern
 	})
 
 	// Convert crawledLinks to map to be able to search in it

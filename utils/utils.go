@@ -88,6 +88,9 @@ func FilterSlice(slice []string, predicate func(string) bool) (filtered []string
 	return
 }
 
+/**
+Adds the following slash if it not already exists in specified string
+*/
 func AddFollowingSlash(str string) string {
 	if chars := strings.Split(str, ""); chars[len(chars)-1] != "/" {
 		return str + "/"

@@ -18,10 +18,11 @@ func main() {
 	// Input variations
 	//url := "https://beteastsports.com/"
 	//url := "https://www.sportintan.com/"
-	//url := "https://ampmlimo.ca/"
+	url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
-	url := "https://mediglobus.com/"
+	//url := "https://mediglobus.com/"
 	//url := "http://example.com/"
+	//url := "https://www.study.ua/"
 
 	// Initialize logger
 	logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)

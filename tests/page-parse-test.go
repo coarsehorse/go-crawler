@@ -1,13 +1,13 @@
 package main
 
 import (
-	"goCrawler/crawler"
-	"goCrawler/utils"
+	"go-crawler/crawler"
+	"go-crawler/utils"
 	"log"
 )
 
 func main() {
-	url := "https://beteastsports.com"
+	url := "https://www.study.ua/"
 	page, err := crawler.ParsePage(url)
 	log.Print(page)
 	utils.CheckError(err)
