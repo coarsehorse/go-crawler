@@ -1,4 +1,5 @@
 #!/usr/bin/bash
-kill -9 $(cat run.pid);
+chmod +x stop.sh;
+./stop.sh;
 chmod +x run.sh;
-./run.sh
+./run.sh;
