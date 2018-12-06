@@ -136,6 +136,11 @@ func GetActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 		activeTasks = append(activeTasks, task)
 	}
 
+	err = tasks.Close()
+	if err != nil {
+		return nil, err
+	}
+
 	return activeTasks, nil
 }
 
@@ -155,6 +160,11 @@ func UpdateCrawlingTaskById(task CrawlingTask, conn *sql.DB) (err error) {
 		return err
 	}
 
+	err = stmt.Close()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -170,6 +180,11 @@ func UpdateEstimatorById(id int, crawledPagesNum sql.NullInt64, endDate sql.Null
 	}
 
 	_, err = stmt.Exec(crawledPagesNum, endDate, crawlingTime, id)
+	if err != nil {
+		return err
+	}
+
+	err = stmt.Close()
 	if err != nil {
 		return err
 	}
@@ -194,6 +209,11 @@ func GetDefaultEstimatorSetting(conn *sql.DB) (setting EstimatorSetting, err err
 	}
 	err = firstSetting.Scan(&defSetting.Id, &defSetting.ServiceName, &defSetting.Design, &defSetting.Markup,
 		&defSetting.Development, &defSetting.ContentM, &defSetting.Testing, &defSetting.Management, &defSetting.Hidden)
+	if err != nil {
+		return EstimatorSetting{}, err
+	}
+
+	err = firstSetting.Close()
 	if err != nil {
 		return EstimatorSetting{}, err
 	}
@@ -250,6 +270,11 @@ func InsertIntoCrawledLinkEstimation(linkEstimations []CrawledLinkEstimation, co
 	}
 
 	_, err = stmt.Exec()
+	if err != nil {
+		return err
+	}
+
+	err = stmt.Close()
 	if err != nil {
 		return err
 	}
