@@ -7,7 +7,6 @@ import (
 	"go-crawler/utils"
 	"log"
 	"sort"
-	"strings"
 	"time"
 )
 
@@ -21,33 +20,52 @@ func main() {
 		activeTasks, err := mysqldao.GetActiveTasks(connection)
 		utils.CheckError(err)
 
+		// Get estimator settings table first row id as default id
+		defSett, err := mysqldao.GetDefaultEstimatorSetting(connection)
+		utils.CheckError(err)
+
 		// Sort by id(less id - added earlier)
 		sort.Slice(activeTasks[:], func(i, j int) bool {
 			return activeTasks[i].Id < activeTasks[j].Id
 		})
 		for _, task := range activeTasks {
 			if task.Status == mysqldao.IN_QUEUE {
+				log.Print("[task_tracker]\tFound new crawling task in queue with id: ", task.Id)
+
 				// Update status
 				task.Status = mysqldao.IN_PROGRESS
 				err = mysqldao.UpdateCrawlingTaskById(task, connection)
 				utils.CheckError(err)
-				log.Print("Found new task id: ", task.Id, ", updated with status: ", task.Status)
+				log.Print("[task_tracker]\tCrawling task status has been updated to: '", task.Status,
+					"', task id: ", task.Id)
 
 				// Perform a task
 				start := time.Now() // get start time
 				crawledLevels := crawler.Crawl([]string{task.Url}, []string{}, []crawler.CrawledLevel{})
 				end := time.Now()                                      // get end time
 				executionTimeMs := end.Sub(start).Nanoseconds() / 1E+6 // evaluate execution time
+				log.Print("[task_tracker]\tCrawling task was performed, task id: ", task.Id)
 
-				// Extract crawled links
+				// Update crawled link estimation table
 				crawledLinks := crawler.ExtractUniqueLinks(crawledLevels)
-
-				// Update crawling task table
-				task.Status = mysqldao.DONE
-				task.CrawledLinks.Valid = true
-				task.CrawledLinks.String = strings.Join(crawledLinks, "\n")
-				err = mysqldao.UpdateCrawlingTaskById(task, connection)
+				linkEstimations := make([]mysqldao.CrawledLinkEstimation, 0, len(crawledLinks))
+				for _, link := range crawledLinks {
+					linkEstimations = append(linkEstimations, mysqldao.CrawledLinkEstimation{
+						CrawlingTaskId: task.Id,
+						Link:           sql.NullString{Valid: true, String: link},
+						TypeId:         sql.NullInt64{Valid: true, Int64: int64(defSett.Id)},
+						Design:         defSett.Design,
+						Markup:         defSett.Markup,
+						Development:    defSett.Development,
+						ContentM:       defSett.ContentM,
+						Testing:        defSett.Testing,
+						Management:     defSett.Management,
+					})
+				}
+				err = mysqldao.InsertIntoCrawledLinkEstimation(linkEstimations, connection)
 				utils.CheckError(err)
+				log.Print("[task_tracker]\t'"+mysqldao.CRAWLED_LINK_EST_TABLE+"' table has been appended(", len(linkEstimations),
+					" rows) with results of crawling task with id: ", task.Id)
 
 				// Update estimator table
 				nullCrawledLinksNum := sql.NullInt64{
@@ -65,10 +83,15 @@ func main() {
 				err = mysqldao.UpdateEstimatorById(task.IdEstimator,
 					nullCrawledLinksNum, nullEndTime, nullTime, connection)
 				utils.CheckError(err)
-				log.Print("Estimator table id: ", task.IdEstimator,
-					"was updated with results by crawling task id: ", task.Id)
+				log.Print("[task_tracker]\t'"+mysqldao.ESTIMATOR_TABLE+"' table record with id: ", task.IdEstimator,
+					" was updated with results by crawling task with id: ", task.Id)
 
-				log.Print("Task id: ", task.Id, " has been performed and updated with status: ", task.Status)
+				// Update crawling task status
+				task.Status = mysqldao.DONE
+				err = mysqldao.UpdateCrawlingTaskById(task, connection)
+				utils.CheckError(err)
+				log.Print("[task_tracker]\tCrawling task status has been updated to: '"+task.Status+
+					"', task id: ", task.Id)
 			}
 		}
 

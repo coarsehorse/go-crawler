@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"go-crawler/utils"
 	"log"
 	"regexp"
@@ -21,4 +22,7 @@ func main() {
 
 	a := []string{"asd", "asd1", "asd2"}
 	log.Print(a[len(a)-2 : len(a)])
+
+	nullStr := sql.NullString{Valid: false}
+	log.Print("-" + nullStr.String + "-")
 }

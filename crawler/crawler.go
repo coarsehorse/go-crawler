@@ -175,7 +175,7 @@ func ParsePage(url string) (CrawledPage, error) {
 }
 
 func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
-	log.Print("Starting crawl ", len(linksToCrawl), " links")
+	log.Print("[crawler]\tStarting crawl ", len(linksToCrawl), " links")
 
 	// To be sure that all links to crawl has following '/'
 	foo := make([]string, 0, len(linksToCrawl))
@@ -198,7 +198,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 			crawledLinks = append(crawledLinks, page.Url)
 		}
 	}
-	log.Print("Crawled with error ", notGotPages, "/", len(linksToCrawl), " links")
+	log.Print("[crawler]\tCrawled with error ", notGotPages, "/", len(linksToCrawl), " links")
 
 	// Add the new crawled level to crawledLevels
 	var lastLevelNum int
@@ -366,12 +366,12 @@ func notifyAboutUrlWithTime(url string, startTime time.Time, error bool, statusC
 	message := ""
 
 	if error {
-		message += "\tERROR\t"
+		message += "ERROR\t"
 	} else {
-		message += "\t" + statusCode + "\t"
+		message += statusCode + "\t"
 	}
 	message += "Parsed by " + strconv.FormatInt(executionTime, 10) + " ms\t"
 	message += "url: " + url
 
-	log.Print(message)
+	log.Print("[crawler]\t" + message)
 }

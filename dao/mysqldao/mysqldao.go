@@ -3,16 +3,21 @@ package mysqldao
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"io/ioutil"
 	"os"
 	"strconv"
+	"strings"
 )
 
 const (
-	CRAWLING_TASK_TABLE     = "crawling_task"
-	ESTIMATOR_TABLE         = "estimator"
-	DB_CREDENTIALS_FILENAME = "db_credentials.json"
+	CRAWLING_TASK_TABLE      = "crawling_task"
+	ESTIMATOR_TABLE          = "estimator"
+	ESTIMATOR_SETTINGS_TABLE = "estimator_settings"
+	CRAWLED_LINK_EST_TABLE   = "crawled_link_estimation"
+	DB_CREDENTIALS_FILENAME  = "db_credentials.json"
 )
 
 // Crawling statuses representation
@@ -23,30 +28,54 @@ const (
 )
 
 type CrawlingTask struct {
-	Id           int            `json:"id"`
-	IdEstimator  int            `json:"id_estimator"`
-	Url          string         `json:"url"`
-	Status       string         `json:"status"`
-	Hidden       bool           `json:"hidden"`
-	CrawledLinks sql.NullString `json:"crawled_links"`
+	Id          int    `json:"id"`
+	IdEstimator int    `json:"idEstimator"`
+	Url         string `json:"url"`
+	Status      string `json:"status"`
+	Hidden      bool   `json:"hidden"`
 }
 
 type Estimation struct {
 	Id              int            `json:"id"`
 	Url             string         `json:"url"`
-	CrawledPagesNum sql.NullInt64  `json:"crawled_pages_num"`
-	StartDate       string         `json:"start_date"`
-	EndDate         sql.NullString `json:"end_date"`
-	CrawlingTime    sql.NullInt64  `json:"crawling_time"`
-	ResultsLink     string         `json:"results_link"`
+	CrawledPagesNum sql.NullInt64  `json:"crawledPagesNum"`
+	StartDate       string         `json:"startDate"`
+	EndDate         sql.NullString `json:"endDate"`
+	CrawlingTime    sql.NullInt64  `json:"crawlingTime"`
+	ResultsLink     string         `json:"resultsLink"`
 }
 
 type DBCredentials struct {
 	Username    string `json:"username"`
 	Password    string `json:"password"`
-	HostAddress string `json:"host_address"`
+	HostAddress string `json:"hostAddress"`
 	Port        int    `json:"port"`
-	DbName      string `json:"db_name"`
+	DbName      string `json:"dbName"`
+}
+
+type EstimatorSetting struct {
+	Id          int             `json:"id"`
+	ServiceName string          `json:"serviceName"`
+	Design      sql.NullFloat64 `json:"design"`
+	Markup      sql.NullFloat64 `json:"markup"`
+	Development sql.NullFloat64 `json:"development"`
+	ContentM    sql.NullFloat64 `json:"contentM"`
+	Testing     sql.NullFloat64 `json:"testing"`
+	Management  sql.NullFloat64 `json:"management"`
+	Hidden      bool            `json:"hidden"`
+}
+
+type CrawledLinkEstimation struct {
+	Id             int             `json:"id"`
+	CrawlingTaskId int             `json:"crawlingTaskId"`
+	Link           sql.NullString  `json:"link"`
+	TypeId         sql.NullInt64   `json:"typeId"`
+	Design         sql.NullFloat64 `json:"design"`
+	Markup         sql.NullFloat64 `json:"markup"`
+	Development    sql.NullFloat64 `json:"development"`
+	ContentM       sql.NullFloat64 `json:"contentM"`
+	Testing        sql.NullFloat64 `json:"testing"`
+	Management     sql.NullFloat64 `json:"management"`
 }
 
 func GetConnection() (conn *sql.DB, err error) {
@@ -92,7 +121,7 @@ func GetActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 	// Map data to CrawlingTask objects
 	for tasks.Next() {
 		task := CrawlingTask{}
-		err = tasks.Scan(&task.Id, &task.IdEstimator, &task.Url, &task.Status, &task.Hidden, &task.CrawledLinks)
+		err = tasks.Scan(&task.Id, &task.IdEstimator, &task.Url, &task.Status, &task.Hidden)
 		if err != nil {
 			return nil, err
 		}
@@ -104,17 +133,16 @@ func GetActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 
 func UpdateCrawlingTaskById(task CrawlingTask, conn *sql.DB) (err error) {
 	stmt, err := conn.Prepare("UPDATE " + CRAWLING_TASK_TABLE + " SET " +
-		"id_estimator=?," +
-		"url=?," +
-		"status=?," +
-		"hidden=?," +
-		"crawled_links=? " +
+		"id_estimator=?, " +
+		"url=?, " +
+		"status=?, " +
+		"hidden=? " +
 		"WHERE id=?")
 	if err != nil {
 		return err
 	}
 
-	_, err = stmt.Exec(task.IdEstimator, task.Url, task.Status, task.Hidden, task.CrawledLinks, task.Id)
+	_, err = stmt.Exec(task.IdEstimator, task.Url, task.Status, task.Hidden, task.Id)
 	if err != nil {
 		return err
 	}
@@ -134,6 +162,86 @@ func UpdateEstimatorById(id int, crawledPagesNum sql.NullInt64, endDate sql.Null
 	}
 
 	_, err = stmt.Exec(crawledPagesNum, endDate, crawlingTime, id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Returns first row id from EstimatorSetting table as default
+func GetDefaultEstimatorSetting(conn *sql.DB) (setting EstimatorSetting, err error) {
+	firstSetting, err := conn.Query("SELECT * " +
+		"FROM " + ESTIMATOR_SETTINGS_TABLE + " " +
+		"WHERE `hidden` IS FALSE " +
+		"LIMIT 1")
+	if err != nil {
+		return EstimatorSetting{}, err
+	}
+
+	defSetting := EstimatorSetting{}
+
+	if !firstSetting.Next() {
+		return EstimatorSetting{}, errors.New("not able to scan next estimator setting")
+	}
+	err = firstSetting.Scan(&defSetting.Id, &defSetting.ServiceName, &defSetting.Design, &defSetting.Markup,
+		&defSetting.Development, &defSetting.ContentM, &defSetting.Testing, &defSetting.Management, &defSetting.Hidden)
+	if err != nil {
+		return EstimatorSetting{}, err
+	}
+
+	return defSetting, nil
+}
+
+func nullableStringOrNull(nullable sql.NullString) string {
+	if nullable.Valid {
+		return nullable.String
+	} else {
+		return "NULL"
+	}
+}
+
+func nullableIntOrNull(nullable sql.NullInt64) string {
+	if nullable.Valid {
+		return fmt.Sprintf("%d", nullable.Int64)
+	} else {
+		return "NULL"
+	}
+}
+
+func nullableFloatOrNull(nullable sql.NullFloat64) string {
+	if nullable.Valid {
+		return fmt.Sprintf("%8.3f", nullable.Float64)
+	} else {
+		return "NULL"
+	}
+}
+
+func InsertIntoCrawledLinkEstimation(linkEstimations []CrawledLinkEstimation, conn *sql.DB) (err error) {
+	batchInsertHeader := "INSERT INTO " + CRAWLED_LINK_EST_TABLE +
+		" (`crawling_task_id`, `link`, `type_id`, `design`, `markup`, " +
+		"`development`, `content_m`, `testing`, `management`) VALUES "
+	batch := make([]string, 0, len(linkEstimations))
+
+	for _, e := range linkEstimations {
+		batch = append(batch, "("+
+			strconv.Itoa(e.CrawlingTaskId)+", "+
+			"'"+nullableStringOrNull(e.Link)+"', "+
+			nullableIntOrNull(e.TypeId)+", "+
+			nullableFloatOrNull(e.Design)+", "+
+			nullableFloatOrNull(e.Markup)+", "+
+			nullableFloatOrNull(e.Development)+", "+
+			nullableFloatOrNull(e.ContentM)+", "+
+			nullableFloatOrNull(e.Testing)+", "+
+			nullableFloatOrNull(e.Management)+")")
+	}
+
+	stmt, err := conn.Prepare(batchInsertHeader + strings.Join(batch, ", "))
+	if err != nil {
+		return err
+	}
+
+	_, err = stmt.Exec()
 	if err != nil {
 		return err
 	}
