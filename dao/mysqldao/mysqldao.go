@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -18,6 +19,8 @@ const (
 	ESTIMATOR_SETTINGS_TABLE = "estimator_settings"
 	CRAWLED_LINK_EST_TABLE   = "crawled_link_estimation"
 	DB_CREDENTIALS_FILENAME  = "db_credentials.json"
+	CONNECTION_TIMEOUT       = 5
+	MAX_CONNECTIONS          = 5
 )
 
 // Crawling statuses representation
@@ -107,6 +110,11 @@ func GetConnection() (conn *sql.DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// https://github.com/go-sql-driver/mysql/issues/461
+	conn.SetConnMaxLifetime(time.Minute * CONNECTION_TIMEOUT)
+	conn.SetMaxIdleConns(MAX_CONNECTIONS)
+	conn.SetMaxOpenConns(MAX_CONNECTIONS)
 
 	return conn, nil
 }
