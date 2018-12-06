@@ -2,3 +2,4 @@
 result*/*
 log*.*
 db_credentials.json
+run.pid
