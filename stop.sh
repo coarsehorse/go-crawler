@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-lastPid=$(cat run.pid)
+lastPid=$(cat pid.pid)
 if [ -z "$lastPid" ]
 then
     echo "\$lastPid is empty. Skipping stopping step"

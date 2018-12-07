@@ -3,3 +3,6 @@ result*/*
 log*.*
 db_credentials*.json
 run.pid
+
+# Compiled binary
+task_tracker
