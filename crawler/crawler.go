@@ -1,6 +1,7 @@
 package crawler
 
 import (
+	"bufio"
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"go-crawler/utils"
@@ -37,7 +38,7 @@ func ParsePage(url string) (CrawledPage, error) {
 	start := time.Now()
 
 	// Ensure url is ok
-	url = utils.AddFollowingSlash(url)
+	url = utils.AddFollowingSlashToUrl(url)
 
 	// Get page by url
 	resp, err := http.Get(url)
@@ -58,6 +59,8 @@ func ParsePage(url string) (CrawledPage, error) {
 
 	// Create goquery Document
 	respBodyReader := resp.Body
+	//htmlBody, err := ioutil.ReadAll(respBodyReader)
+	//log.Print(htmlBody)
 	doc, err := goquery.NewDocumentFromReader(respBodyReader)
 	if err != nil {
 		errMessage := "Failed to create goquery Document from " + url + " with error: \"" + err.Error() + "\""
@@ -72,7 +75,7 @@ func ParsePage(url string) (CrawledPage, error) {
 
 	// Grab url
 	// Get original url or the last redirect
-	crawledPage.Url = utils.AddFollowingSlash(strings.TrimSpace(resp.Request.URL.String()))
+	crawledPage.Url = utils.AddFollowingSlashToUrl(strings.TrimSpace(resp.Request.URL.String()))
 
 	// Grab title
 	title := doc.Find("title").Eq(0).Text()
@@ -88,8 +91,10 @@ func ParsePage(url string) (CrawledPage, error) {
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
 		link, exists := s.Attr("href")
 		link = strings.TrimSpace(link)
+		log.Print(link)
 		if exists {
 			crawledPage.Links = append(crawledPage.Links, link)
+			log.Print("Exists ", link)
 		}
 	})
 	// Extend relative links
@@ -153,13 +158,13 @@ func ParsePage(url string) (CrawledPage, error) {
 	// Checking pagination pattern
 	r := regexp.MustCompile(`^((http|https):\/\/.*\/)(page|p)\/\d+\/$`)
 	if paginationRootMatched := r.FindStringSubmatch(url); paginationRootMatched != nil {
-		paginationRoot := utils.AddFollowingSlash(paginationRootMatched[1])
+		paginationRoot := utils.AddFollowingSlashToUrl(paginationRootMatched[1])
 		crawledPage.Links = append(crawledPage.Links, paginationRoot)
 	}
 
 	// Checking get parameters pattern
 	if strings.Contains(url, `?`) {
-		withoutGet := utils.AddFollowingSlash(strings.Split(url, `?`)[0])
+		withoutGet := utils.AddFollowingSlashToUrl(strings.Split(url, `?`)[0])
 		crawledPage.Links = append(crawledPage.Links, withoutGet)
 	}
 
@@ -180,7 +185,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	// To be sure that all links to crawl has following '/'
 	foo := make([]string, 0, len(linksToCrawl))
 	for _, link := range linksToCrawl {
-		foo = append(foo, utils.AddFollowingSlash(link))
+		foo = append(foo, utils.AddFollowingSlashToUrl(link))
 	}
 	linksToCrawl = foo
 
@@ -244,7 +249,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	// Add the following "/"
 	foo = make([]string, 0, len(nextLevelLinks))
 	for _, link := range nextLevelLinks {
-		foo = append(foo, utils.AddFollowingSlash(link))
+		foo = append(foo, utils.AddFollowingSlashToUrl(link))
 	}
 	nextLevelLinks = foo
 
@@ -290,13 +295,13 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 	}
 
 	// To bee sure that input URLs has trailing '/'
-	relativeLink = utils.AddFollowingSlash(relativeLink)
-	linkAbsoluteLocation = utils.AddFollowingSlash(linkAbsoluteLocation)
+	relativeLink = utils.AddFollowingSlashToUrl(relativeLink)
+	linkAbsoluteLocation = utils.AddFollowingSlashToUrl(linkAbsoluteLocation)
 
 	// Common data for the all cases
 	absoluteSplitted := strings.Split(linkAbsoluteLocation, `/`)
 	protocol := absoluteSplitted[0] + "//"
-	domain := utils.AddFollowingSlash(utils.ExtractDomain(linkAbsoluteLocation))
+	domain := utils.AddFollowingSlashToUrl(utils.ExtractDomain(linkAbsoluteLocation))
 
 	// Case /
 	if relativeLink == `/` { // root
@@ -311,7 +316,7 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 	}
 
 	// Case a/, path/to/page/, about/
-	r = regexp.MustCompile(`^([\w-]+/)+$`)
+	r = regexp.MustCompile(`^([\w-]+)+$`)
 	if r.MatchString(relativeLink) { // relative to location
 		return linkAbsoluteLocation + relativeLink, nil
 	}
@@ -337,7 +342,7 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 				linkAbsoluteLocation)
 		} else {
 			newAbsoluteSplitted := absoluteSplitted[:len(absoluteSplitted)-2] // -2 because we have following /
-			newAbsolute := utils.AddFollowingSlash(strings.Join(newAbsoluteSplitted, "/"))
+			newAbsolute := utils.AddFollowingSlashToUrl(strings.Join(newAbsoluteSplitted, "/"))
 			return newAbsolute + newRelativePart, nil
 		}
 	}
@@ -374,4 +379,45 @@ func notifyAboutUrlWithTime(url string, startTime time.Time, error bool, statusC
 	message += "url: " + url
 
 	log.Print("[crawler]\t" + message)
+}
+
+func GetLinksFromSitemap(siteMainPageUrl string) (sitemapLinks []string, err error) {
+	// Fix url
+	siteMainPageUrl = utils.AddFollowingSlashToUrl(siteMainPageUrl)
+	sitemapUrl := siteMainPageUrl + "sitemap.xml"
+
+	// Get sitemap content
+	resp, err := http.Get(sitemapUrl)
+
+	// Handle response errors
+	if err != nil {
+		errMessage := "Failed to read sitemap: \"" + sitemapUrl + "\" with error: \"" + err.Error() + "\""
+		return nil, errors.New(errMessage)
+	}
+
+	// Handle not 200 status of original query or last redirect
+	if resp.StatusCode != 200 {
+		errMessage := "Failed to read sitemap: \"" + sitemapUrl + "\" with error: \"Not 200 status code(" +
+			strconv.Itoa(resp.StatusCode) + ")\""
+		return nil, errors.New(errMessage)
+	}
+
+	// Read sitemap
+	scanner := bufio.NewScanner(resp.Body)
+
+	r := regexp.MustCompile(`^<url><loc>(.*)</loc>.*</url>$`)
+
+	for scanner.Scan() {
+		link := scanner.Text()
+		if extrUrl := r.FindStringSubmatch(link); extrUrl != nil {
+			sitemapLinks = append(sitemapLinks, utils.AddFollowingSlashToUrl(extrUrl[1]))
+		}
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+
+	return sitemapLinks, nil
 }

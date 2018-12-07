@@ -41,7 +41,10 @@ func main() {
 
 				// Perform a task
 				start := time.Now() // get start time
-				crawledLevels := crawler.Crawl([]string{task.Url}, []string{}, []crawler.CrawledLevel{})
+				sitemap, err := crawler.GetLinksFromSitemap(task.Url)
+				utils.CheckError(err)
+				linksToCrawl := utils.UniqueStringSlice(append(sitemap, task.Url))
+				crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{})
 				end := time.Now()                                      // get end time
 				executionTimeMs := end.Sub(start).Nanoseconds() / 1E+6 // evaluate execution time
 				log.Print("[task_tracker]\tCrawling task was performed, task id: ", task.Id)

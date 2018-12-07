@@ -25,4 +25,12 @@ func main() {
 
 	nullStr := sql.NullString{Valid: false}
 	log.Print("-" + nullStr.String + "-")
+
+	r = regexp.MustCompile(`^//(.*)$`)
+	rel := "//www.study.ua/i/academic.htm"
+	if newLink := r.FindStringSubmatch(rel); newLink != nil {
+		log.Print(newLink[1])
+	} else {
+		log.Print("nope")
+	}
 }

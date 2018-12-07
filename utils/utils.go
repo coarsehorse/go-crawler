@@ -98,6 +98,14 @@ func AddFollowingSlash(str string) string {
 	return str
 }
 
+func AddFollowingSlashToUrl(url string) string {
+	if strings.HasSuffix(url, "htm") || strings.HasSuffix(url, "html") {
+		return url
+	}
+
+	return AddFollowingSlash(url)
+}
+
 func ExtractDomain(url string) string {
 	return strings.Split(url, "/")[2]
 }
