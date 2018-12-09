@@ -59,8 +59,10 @@ func ParsePage(url string) (CrawledPage, error) {
 
 	// Create goquery Document
 	respBodyReader := resp.Body
-	//htmlBody, err := ioutil.ReadAll(respBodyReader)
-	//log.Print(htmlBody)
+	// [Debug] uncomment to see html code
+	// [!] Note, io.Reader can be used once - goquery won't find elements further
+	/*html, err := ioutil.ReadAll(respBodyReader)
+	log.Print(html)*/
 	doc, err := goquery.NewDocumentFromReader(respBodyReader)
 	if err != nil {
 		errMessage := "Failed to create goquery Document from " + url + " with error: \"" + err.Error() + "\""
@@ -90,19 +92,19 @@ func ParsePage(url string) (CrawledPage, error) {
 	// Grab links
 	doc.Find("a").Each(func(i int, s *goquery.Selection) {
 		link, exists := s.Attr("href")
-		link = strings.TrimSpace(link)
-		log.Print(link)
 		if exists {
+			link = strings.TrimSpace(link)
 			crawledPage.Links = append(crawledPage.Links, link)
-			log.Print("Exists ", link)
 		}
 	})
 	// Extend relative links
 	foo := make([]string, 0, len(crawledPage.Links))
 	for _, link := range crawledPage.Links {
-		if extendedLink, err := extendRelativeLink(link, url); err == nil {
+		if extendedLink, err := ExtendRelativeLink(link, url); err == nil {
 			foo = append(foo, extendedLink)
-		}
+		} /*else { // [Debug] Uncomment to see errors of relative extension
+			log.Println(err.Error())
+		}*/
 	}
 	crawledPage.Links = foo
 
@@ -120,7 +122,7 @@ func ParsePage(url string) (CrawledPage, error) {
 
 		hreflang = strings.TrimSpace(hreflang)
 		href = strings.TrimSpace(href)
-		href, err = extendRelativeLink(href, url)
+		href, err = ExtendRelativeLink(href, url)
 		if err != nil {
 			panic(err.Error())
 		}
@@ -141,7 +143,7 @@ func ParsePage(url string) (CrawledPage, error) {
 	// Grab canonical url
 	canonicalUrl, exists := doc.Find("link[rel *= 'canonical']").Eq(0).Attr("href")
 	if exists {
-		canonicalUrl, err = extendRelativeLink(strings.TrimSpace(canonicalUrl), url)
+		canonicalUrl, err = ExtendRelativeLink(strings.TrimSpace(canonicalUrl), url)
 		if err != nil {
 			return CrawledPage{}, err
 		}
@@ -246,10 +248,10 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		return true
 	})
 
-	// Add the following "/"
+	// Extract part before # + add the following "/"
 	foo = make([]string, 0, len(nextLevelLinks))
 	for _, link := range nextLevelLinks {
-		foo = append(foo, utils.AddFollowingSlashToUrl(link))
+		foo = append(foo, utils.AddFollowingSlashToUrl(utils.ExtractUrlBeforeSharp(link)))
 	}
 	nextLevelLinks = foo
 
@@ -260,7 +262,8 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	domain := utils.ExtractDomain(linksToCrawl[0])
 	domainParts := strings.Split(domain, `.`)
 	domainWithoutSubdoms := strings.Join(domainParts[len(domainParts)-2:len(domainParts)], `.`)
-	domainPattern := `^https?:\/\/([-\w\d]+\.)*` + strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	domainPattern := `^https?:\/\/([-\w\d]+\.)*` +
+		strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
 	r := regexp.MustCompile(domainPattern)
 
 	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
@@ -288,7 +291,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	}
 }
 
-func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absoluteUrl string, err error) {
+func ExtendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absoluteUrl string, err error) {
 	// If relativeLink is empty
 	if relativeLink == "" {
 		return "", errors.New("Empty relativeLink")
@@ -296,17 +299,13 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 
 	// To bee sure that input URLs has trailing '/'
 	relativeLink = utils.AddFollowingSlashToUrl(relativeLink)
+	linkAbsoluteLocation = utils.ExtractUrlBeforeSharp(linkAbsoluteLocation) // part before #
 	linkAbsoluteLocation = utils.AddFollowingSlashToUrl(linkAbsoluteLocation)
 
 	// Common data for the all cases
 	absoluteSplitted := strings.Split(linkAbsoluteLocation, `/`)
 	protocol := absoluteSplitted[0] + "//"
 	domain := utils.AddFollowingSlashToUrl(utils.ExtractDomain(linkAbsoluteLocation))
-
-	// Case /
-	if relativeLink == `/` { // root
-		return protocol + domain, nil
-	}
 
 	// Case relativeLink is already absolute
 	pattern := `^(http|https):\/\/.*$`
@@ -315,34 +314,75 @@ func extendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 		return relativeLink, nil
 	}
 
-	// Case a/, path/to/page/, about/
-	r = regexp.MustCompile(`^([\w-]+)+$`)
-	if r.MatchString(relativeLink) { // relative to location
-		return linkAbsoluteLocation + relativeLink, nil
+	// Extract clean path and params(#.., ?..) from relative url
+	cleanRelative := relativeLink
+	relativeParams := "" // #... or ?...
+
+	tagR := regexp.MustCompile(`^(.*)([#].*)$`)
+	if tag := tagR.FindStringSubmatch(cleanRelative); tag != nil {
+		cleanRelative = tag[1]
+		relativeParams = tag[2] + relativeParams
+	}
+	questR := regexp.MustCompile(`^(.*)([?].*)$`)
+	if quest := questR.FindStringSubmatch(cleanRelative); quest != nil {
+		cleanRelative = quest[1]
+		relativeParams = quest[2] + relativeParams
 	}
 
-	// Case /a/, /path/to/page/, /about/
-	r = regexp.MustCompile(`^/(([\w-]+/)+)$`)
-	if newRelative := r.FindStringSubmatch(relativeLink); newRelative != nil { // relative to root
-		return protocol + domain + newRelative[1], nil
+	// Case ?id=1, #Header
+	if cleanRelative == `` {
+		return linkAbsoluteLocation + relativeParams, nil
 	}
 
-	// Case //path/to/smth
-	r = regexp.MustCompile(`^//(.*/)$`)
+	// Case /
+	if cleanRelative == `/` { // root
+		return protocol + domain + relativeParams, nil
+	}
+
+	// Case a/, path/to/page/, about/, path/page.htm
+	r = regexp.MustCompile(`^(\w[.\w-]*/?)+$`)
+	if r.MatchString(cleanRelative) { // relative to location
+		if utils.IsFile(linkAbsoluteLocation) {
+			r = regexp.MustCompile(`^(.*/).*\..*$`)
+			if newAbsolute := r.FindStringSubmatch(linkAbsoluteLocation); newAbsolute != nil {
+				return newAbsolute[1] + cleanRelative + relativeParams, nil
+			}
+			return "", errors.New("Can't parse relative link: \"" + relativeLink +
+				"\" with absolute location: \"" + linkAbsoluteLocation + "\"")
+		} else {
+			return linkAbsoluteLocation + cleanRelative + relativeParams, nil
+		}
+	}
+
+	// Case /a/, /path/to/page/, /about/ /path/page.htm
+	r = regexp.MustCompile(`^/((\w[.\w-]*/?)+)$`)
+	if newRelative := r.FindStringSubmatch(cleanRelative); newRelative != nil { // relative to root
+		return protocol + domain + newRelative[1] + relativeParams, nil
+	}
+
+	// Case //path/to/smth //path/page.htm
+	r = regexp.MustCompile(`^//(.*)$`)
 	if newLink := r.FindStringSubmatch(relativeLink); newLink != nil { // same protocol link
 		return protocol + newLink[1], nil
 	}
 
-	// Case ../path/
-	r = regexp.MustCompile(`^\.\./(.*/)$`)
+	// Case ../path/ ../path/page.htm
+	r = regexp.MustCompile(`^\.\./(.*)$`)
 	if newRelative := r.FindStringSubmatch(relativeLink); newRelative != nil {
 		newRelativePart := newRelative[1]
 		if len(absoluteSplitted) < 4 { // less than 4 levels in absolute: (http:)()(domain.com)(first_level)
 			return "", errors.New("Cannot resolve '../' relative path for absolute location " +
 				linkAbsoluteLocation)
 		} else {
-			newAbsoluteSplitted := absoluteSplitted[:len(absoluteSplitted)-2] // -2 because we have following /
+			var newAbsoluteSplitted []string
+
+			if utils.ExtractLastChar(linkAbsoluteLocation) == "/" {
+				newAbsoluteSplitted = absoluteSplitted[:len(absoluteSplitted)-2] // -2 because we have '' after last /
+			} else {
+				newAbsoluteSplitted = absoluteSplitted[:len(absoluteSplitted)-1] // .htm case
+			}
 			newAbsolute := utils.AddFollowingSlashToUrl(strings.Join(newAbsoluteSplitted, "/"))
+
 			return newAbsolute + newRelativePart, nil
 		}
 	}

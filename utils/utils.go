@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -98,8 +99,18 @@ func AddFollowingSlash(str string) string {
 	return str
 }
 
+func IsFile(address string) bool {
+	return strings.HasSuffix(address, `.htm`) ||
+		strings.HasSuffix(address, `.html`) ||
+		strings.HasSuffix(address, `.xml`) ||
+		strings.HasSuffix(address, `.jpeg`) ||
+		strings.HasSuffix(address, `.jpg`) ||
+		strings.HasSuffix(address, `.png`) ||
+		strings.HasSuffix(address, `.ico`)
+}
+
 func AddFollowingSlashToUrl(url string) string {
-	if strings.HasSuffix(url, "htm") || strings.HasSuffix(url, "html") {
+	if IsFile(url) {
 		return url
 	}
 
@@ -108,4 +119,34 @@ func AddFollowingSlashToUrl(url string) string {
 
 func ExtractDomain(url string) string {
 	return strings.Split(url, "/")[2]
+}
+
+func ExtractLastChar(str string) (lastChar string) {
+	chars := strings.Split(str, "")
+
+	if len(chars) > 0 {
+		return chars[len(chars)-1]
+	} else {
+		return str
+	}
+}
+
+func ExtractFirstChar(str string) (firstChar string) {
+	chars := strings.Split(str, "")
+
+	if len(chars) > 0 {
+		return chars[0]
+	} else {
+		return str
+	}
+}
+
+func ExtractUrlBeforeSharp(url string) string {
+	tagPattern := `^(.*)#(.*)$`
+	r := regexp.MustCompile(tagPattern)
+	if beforeSharp := r.FindStringSubmatch(url); beforeSharp != nil {
+		return beforeSharp[1]
+	}
+
+	return url
 }

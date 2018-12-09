@@ -1,36 +1,21 @@
 package main
 
 import (
-	"database/sql"
+	"go-crawler/crawler"
 	"go-crawler/utils"
 	"log"
-	"regexp"
 )
 
 func main() {
-	url1 := "https://study.ua/"
-	url2 := "http://summer.winter.study.ua/"
-	url3 := "http://nestudy.ua/asd-study.ua/"
+	//rel := "/q/#Embassy English — английский для детей в Канаде/"
+	//rel := "/consultation/?theme=Артур%20Нещадин,%20отзыв/"
+	//rel := "/q/#Albert-Ludwigs-Universität Freiburg/"
+	rel := "tel: 0970000320"
 
-	pattern := `^https?:\/\/([^\.]+\.)+study\.ua\/.*$`
-	r, err := regexp.Compile(pattern)
+	abs := "https://www.study.ua/program-7819.htm"
+	//abs := "https://www.study.ua/program-7819"
+
+	res, err := crawler.ExtendRelativeLink(rel, abs)
 	utils.CheckError(err)
-
-	log.Print(r.MatchString(url1))
-	log.Print(r.MatchString(url2))
-	log.Print(r.MatchString(url3))
-
-	a := []string{"asd", "asd1", "asd2"}
-	log.Print(a[len(a)-2 : len(a)])
-
-	nullStr := sql.NullString{Valid: false}
-	log.Print("-" + nullStr.String + "-")
-
-	r = regexp.MustCompile(`^//(.*)$`)
-	rel := "//www.study.ua/i/academic.htm"
-	if newLink := r.FindStringSubmatch(rel); newLink != nil {
-		log.Print(newLink[1])
-	} else {
-		log.Print("nope")
-	}
+	log.Println(res)
 }
