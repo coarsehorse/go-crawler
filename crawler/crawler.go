@@ -299,7 +299,8 @@ func ExtendRelativeLink(relativeLink string, linkAbsoluteLocation string) (absol
 
 	// To bee sure that input URLs has trailing '/'
 	relativeLink = utils.AddFollowingSlashToUrl(relativeLink)
-	linkAbsoluteLocation = utils.ExtractUrlBeforeSharp(linkAbsoluteLocation) // part before #
+	linkAbsoluteLocation = utils.ExtractUrlBeforeSharp(linkAbsoluteLocation)     // part before #
+	linkAbsoluteLocation = utils.ExtractUrlBeforeQuestMark(linkAbsoluteLocation) // part before ?
 	linkAbsoluteLocation = utils.AddFollowingSlashToUrl(linkAbsoluteLocation)
 
 	// Common data for the all cases

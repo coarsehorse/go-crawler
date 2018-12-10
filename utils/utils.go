@@ -142,10 +142,20 @@ func ExtractFirstChar(str string) (firstChar string) {
 }
 
 func ExtractUrlBeforeSharp(url string) string {
-	tagPattern := `^(.*)#(.*)$`
+	tagPattern := `^(.*)[#].*$`
 	r := regexp.MustCompile(tagPattern)
 	if beforeSharp := r.FindStringSubmatch(url); beforeSharp != nil {
 		return beforeSharp[1]
+	}
+
+	return url
+}
+
+func ExtractUrlBeforeQuestMark(url string) string {
+	questPattern := `^(.*)[?].*$`
+	r := regexp.MustCompile(questPattern)
+	if beforeQuest := r.FindStringSubmatch(url); beforeQuest != nil {
+		return beforeQuest[1]
 	}
 
 	return url
