@@ -2,7 +2,7 @@
 result*/*
 log*.*
 db_credentials*.json
-run.pid
+*.pid
 
 # Compiled binary
 task_tracker

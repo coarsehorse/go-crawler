@@ -39,11 +39,25 @@ func main() {
 				log.Print("[task_tracker]\tCrawling task status has been updated to: '", task.Status,
 					"', task id: ", task.Id)
 
+				taskUrl := utils.AddFollowingSlashToUrl(task.Url)
+
+				// Check the url to crawl
+				if !utils.IsUrl(taskUrl) {
+					// Update skipped crawling task to DONE
+					task.Status = mysqldao.DONE
+					err = mysqldao.UpdateCrawlingTaskById(task, connection)
+					utils.CheckError(err)
+					log.Print("[task_tracker]\tCrawling task has been skipped because of not valid url: \"",
+						taskUrl, "\", task id: ", task.Id)
+
+					continue
+				}
+
 				// Perform a task
 				start := time.Now() // get start time
-				sitemap, err := crawler.GetLinksFromSitemap(task.Url)
+				sitemap, err := crawler.GetLinksFromSitemap(taskUrl)
 				utils.CheckError(err)
-				linksToCrawl := utils.UniqueStringSlice(append(sitemap, task.Url))
+				linksToCrawl := utils.UniqueStringSlice(append(sitemap, taskUrl))
 				crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{})
 				end := time.Now()                                      // get end time
 				executionTimeMs := end.Sub(start).Nanoseconds() / 1E+6 // evaluate execution time

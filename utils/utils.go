@@ -160,3 +160,10 @@ func ExtractUrlBeforeQuestMark(url string) string {
 
 	return url
 }
+
+func IsUrl(url string) bool {
+	urlPattern := `^https?://(.*)$`
+	r := regexp.MustCompile(urlPattern)
+
+	return r.MatchString(url)
+}
