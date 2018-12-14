@@ -21,9 +21,10 @@ func main() {
 	//url := "https://www.polygon.com/playstation"
 	//url := "https://mediglobus.com/"
 	//url := "http://example.com/"
-	url := "https://www.study.ua/"
 	//url := "https://www.study.ua/q/"
 	//url := "https://www.study.ua/q/#"
+	//url := "https://www.study.ua/"
+	url := "https://www.lina-ammor.com/"
 
 	// Initialize logger
 	/*logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)

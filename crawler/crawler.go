@@ -446,7 +446,7 @@ func GetLinksFromSitemap(siteMainPageUrl string) (sitemapLinks []string, err err
 	// Read sitemap
 	scanner := bufio.NewScanner(resp.Body)
 
-	r := regexp.MustCompile(`^<url><loc>(.*)</loc>.*</url>$`)
+	r := regexp.MustCompile(`^.*<loc>(.*)</loc>.*$`)
 
 	for scanner.Scan() {
 		link := scanner.Text()
@@ -455,10 +455,14 @@ func GetLinksFromSitemap(siteMainPageUrl string) (sitemapLinks []string, err err
 		}
 	}
 
+	sitemapLinks = utils.UniqueStringSlice(sitemapLinks)
+
 	err = resp.Body.Close()
 	if err != nil {
 		return nil, err
 	}
+
+	log.Print("[crawler]\tFound ", len(sitemapLinks), " unique links at "+sitemapUrl)
 
 	return sitemapLinks, nil
 }
