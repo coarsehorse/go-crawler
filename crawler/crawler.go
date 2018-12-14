@@ -270,6 +270,13 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		return r.MatchString(link) // validate link with domainPattern
 	})
 
+	// Filter out image links
+	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
+		return !(strings.HasSuffix(link, `.png`) ||
+			strings.HasSuffix(link, `.jpg`) ||
+			strings.HasSuffix(link, `.jpeg`))
+	})
+
 	// Convert crawledLinks to map to be able to search in it
 	crawledMap := make(map[string]struct{}, len(crawledLinks))
 	for _, link := range crawledLinks {
