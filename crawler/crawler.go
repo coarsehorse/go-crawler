@@ -193,7 +193,7 @@ func worker(id int, tasks <-chan string, results chan<- CrawledPage) {
 	for t := range tasks {
 		log.Print("[worker-", id, "]\t", "Starting crawl ", t)
 		cp, err := ParsePage(t)
-		if err == nil {
+		if err != nil {
 			results <- CrawledPage{}
 		} else {
 			results <- cp
@@ -235,23 +235,21 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 		go worker(j, tasksCh, resultsCh)
 	}
 
-	// Submit crawling tasks
-	for _, link := range linksToCrawl {
-		link = utils.AddFollowingSlashToUrl(link)
-		tasksCh <- link
-		crawledLinks = append(crawledLinks, link)
-	}
-	log.Println("After submit")
-	close(tasksCh)
-	log.Println("After close task channel")
+	// Feeds crawling tasks as soon as workers can consume it
+	go func() {
+		for _, link := range linksToCrawl {
+			link = utils.AddFollowingSlashToUrl(link)
+			tasksCh <- link
+			crawledLinks = append(crawledLinks, link)
+		}
+		close(tasksCh)
+	}()
+
 	// Waiting for results
-	for i := 0; i < len(linksToCrawl); i++ {
-	//for range linksToCrawl {
-		log.Println("In waiting block")
+	//for i := 0; i < len(linksToCrawl); i++ {
+	for range linksToCrawl {
 		crawledPage := <-resultsCh
-		log.Println("received")
 		if crawledPage.IsEmpty() {
-			log.Println("empty")
 			notGotPages++
 		}
 		crawledPages = append(crawledPages, crawledPage)

@@ -16,8 +16,8 @@ const (
 func main() {
 	// Input variations
 	//url := "https://beteastsports.com/"
-	url := "https://www.sportintan.com/"
-	//url := "https://ampmlimo.ca/"
+	//url := "https://www.sportintan.com/"
+	url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
 	//url := "https://mediglobus.com/"
 	//url := "http://example.com/"
