@@ -330,6 +330,8 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 
 	// Filter out image links
 	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
+		link = strings.ToLower(link)
+
 		return !(strings.HasSuffix(link, `.png`) ||
 			strings.HasSuffix(link, `.jpg`) ||
 			strings.HasSuffix(link, `.jpeg`))
