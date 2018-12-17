@@ -100,6 +100,8 @@ func AddFollowingSlash(str string) string {
 }
 
 func IsFile(address string) bool {
+	address = strings.ToLower(address)
+
 	return strings.HasSuffix(address, `.htm`) ||
 		strings.HasSuffix(address, `.html`) ||
 		strings.HasSuffix(address, `.xml`) ||

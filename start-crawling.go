@@ -17,13 +17,13 @@ func main() {
 	// Input variations
 	//url := "https://beteastsports.com/"
 	//url := "https://www.sportintan.com/"
-	url := "https://ampmlimo.ca/"
+	//url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
 	//url := "https://mediglobus.com/"
 	//url := "http://example.com/"
 	//url := "https://www.study.ua/q/"
 	//url := "https://www.study.ua/q/#"
-	//url := "https://www.study.ua/"
+	url := "https://www.study.ua/"
 	//url := "https://www.lina-ammor.com/"
 
 	// Initialize logger
