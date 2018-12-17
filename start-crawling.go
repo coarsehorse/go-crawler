@@ -26,6 +26,8 @@ func main() {
 	//url := "https://www.study.ua/"
 	url := "https://www.lina-ammor.com/"
 
+	includeSubdomains := false
+
 	// Initialize logger
 	/*logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)
 	if err != nil {
@@ -41,7 +43,7 @@ func main() {
 	utils.CheckError(err)
 	linksToCrawl := utils.UniqueStringSlice(append(sitemap, url))
 	// Crawl specified url
-	crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{})
+	crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{}, includeSubdomains)
 
 	// Get execution time in ms
 	executionTime := time.Now().Sub(start).Nanoseconds() / 1E+6

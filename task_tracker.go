@@ -58,7 +58,8 @@ func main() {
 				sitemap, err := crawler.GetLinksFromSitemap(taskUrl)
 				utils.CheckError(err)
 				linksToCrawl := utils.UniqueStringSlice(append(sitemap, taskUrl))
-				crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{})
+				crawledLevels := crawler.Crawl(linksToCrawl, []string{},
+					[]crawler.CrawledLevel{}, task.IncludeSubdomains)
 				end := time.Now()                                      // get end time
 				executionTimeMs := end.Sub(start).Nanoseconds() / 1E+6 // evaluate execution time
 				log.Print("[task_tracker]\tCrawling task was performed, task id: ", task.Id)

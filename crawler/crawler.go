@@ -181,7 +181,8 @@ func ParsePage(url string) (CrawledPage, error) {
 	return crawledPage, nil
 }
 
-func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []CrawledLevel) []CrawledLevel {
+func Crawl(linksToCrawl []string, crawledLinks []string,
+	crawledLevels []CrawledLevel, includeSubdomains bool) []CrawledLevel {
 	log.Print("[crawler]\tStarting crawl ", len(linksToCrawl), " links")
 
 	// To be sure that all links to crawl has following '/'
@@ -262,8 +263,14 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	domain := utils.ExtractDomain(linksToCrawl[0])
 	domainParts := strings.Split(domain, `.`)
 	domainWithoutSubdoms := strings.Join(domainParts[len(domainParts)-2:len(domainParts)], `.`)
-	domainPattern := `^https?:\/\/([-\w\d]+\.)*` +
-		strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	var domainPattern string
+	if includeSubdomains {
+		domainPattern = `^https?:\/\/([-\w\d]+\.)*` +
+			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	} else { // www - exception, it treated as no subdomain
+		domainPattern = `^https?:\/\/(www\.)?` +
+			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	}
 	r := regexp.MustCompile(domainPattern)
 
 	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
@@ -294,7 +301,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string, crawledLevels []Crawled
 	if len(remainingLinks) == 0 { // crawling is done
 		return crawledLevels
 	} else {
-		return Crawl(remainingLinks, crawledLinks, crawledLevels) // crawl next level
+		return Crawl(remainingLinks, crawledLinks, crawledLevels, includeSubdomains) // crawl next level
 	}
 }
 
