@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	GORUTINES_NUM = 32
+	PARALLEL_LVL = 4
 )
 
 type CrawledPage struct {
@@ -26,6 +26,14 @@ type CrawledPage struct {
 	Imgs           []string          `json:"imgs"`
 	CanonicalUrl   string            `json:"canonicalUrl"`
 	NoIndex        bool              `json:"noIndex"`
+}
+
+func (cp CrawledPage) IsEmpty() bool {
+	if (cp.Url == "") && (cp.H1 == "") && (cp.Title == "") && (len(cp.Links) == 0) && (len(cp.HreflangUrlMap) == 0) &&
+		(len(cp.Imgs) == 0) && (cp.CanonicalUrl == "") && (cp.NoIndex == false) {
+		return true
+	}
+	return false
 }
 
 type CrawledLevel struct {
@@ -181,6 +189,18 @@ func ParsePage(url string) (CrawledPage, error) {
 	return crawledPage, nil
 }
 
+func worker(id int, tasks <-chan string, results chan<- CrawledPage) {
+	for t := range tasks {
+		log.Print("[worker-", id, "]\t", "Starting crawl ", t)
+		cp, err := ParsePage(t)
+		if err != nil {
+			results <- CrawledPage{}
+		} else {
+			results <- cp
+		}
+	}
+}
+
 func Crawl(linksToCrawl []string, crawledLinks []string,
 	crawledLevels []CrawledLevel, includeSubdomains bool) []CrawledLevel {
 	log.Print("[crawler]\tStarting crawl ", len(linksToCrawl), " links")
@@ -194,7 +214,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 
 	notGotPages := 0
 	crawledPages := make([]CrawledPage, 0)
-	for _, link := range linksToCrawl {
+	/*for _, link := range linksToCrawl {
 		page, err := ParsePage(link)
 		if err != nil {
 			notGotPages++
@@ -205,7 +225,41 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 		if link != page.Url { // if request was redirected
 			crawledLinks = append(crawledLinks, page.Url)
 		}
+	}*/
+
+	// Define channels
+	tasksCh := make(chan string)
+	resultsCh := make(chan CrawledPage)
+
+	// Run workers
+	for j := 0; j < PARALLEL_LVL; j++ {
+		go worker(j, tasksCh, resultsCh)
 	}
+
+	// Feeds crawling tasks as soon as workers can consume it
+	go func() {
+		for _, link := range linksToCrawl {
+			link = utils.AddFollowingSlashToUrl(link)
+			tasksCh <- link
+			crawledLinks = append(crawledLinks, link)
+		}
+		close(tasksCh)
+	}()
+
+	// Waiting for results
+	//for i := 0; i < len(linksToCrawl); i++ {
+	for range linksToCrawl {
+		crawledPage := <-resultsCh
+		if crawledPage.IsEmpty() {
+			notGotPages++
+		}
+		crawledPages = append(crawledPages, crawledPage)
+		crawledLinks = append(crawledLinks, crawledPage.Url)
+	}
+
+	// Unique crawledLinks
+	crawledLinks = utils.UniqueStringSlice(crawledLinks)
+
 	log.Print("[crawler]\tCrawled with error ", notGotPages, "/", len(linksToCrawl), " links")
 
 	// Add the new crawled level to crawledLevels
@@ -219,9 +273,6 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 		LevelNum:     lastLevelNum + 1,
 		CrawledPages: crawledPages,
 	})
-
-	// Unique crawledLinks
-	crawledLinks = utils.UniqueStringSlice(crawledLinks)
 
 	// Collect and unique all links from crawled pages
 	nextLevelLinksMap := make(map[string]struct{}, 0)
