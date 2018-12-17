@@ -66,6 +66,9 @@ func main() {
 
 				// Update crawled link estimation table
 				crawledLinks := crawler.ExtractUniqueLinks(crawledLevels)
+				sort.Slice(crawledLinks[:], func(i, j int) bool {
+					return crawledLinks[i] < crawledLinks[j]
+				})
 				linkEstimations := make([]mysqldao.CrawledLinkEstimation, 0, len(crawledLinks))
 				for _, link := range crawledLinks {
 					linkEstimations = append(linkEstimations, mysqldao.CrawledLinkEstimation{

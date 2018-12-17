@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"sort"
 )
 
 func main() {
@@ -19,8 +20,17 @@ func main() {
 	//utils.CheckError(err)
 	//log.Println(res)
 
-	a := []string{"asda", "zxc"}
-	for range a {
-		log.Println("1")
+	a := []string{"xyz", "abc", "mno"}
+
+	for _, e := range a {
+		log.Println(e)
+	}
+
+	sort.Slice(a[:], func(i, j int) bool {
+		return a[i] < a[j]
+	})
+
+	for _, e := range a {
+		log.Println(e)
 	}
 }
