@@ -109,7 +109,8 @@ func IsFile(address string) bool {
 		strings.HasSuffix(address, `.jpg`) ||
 		strings.HasSuffix(address, `.png`) ||
 		strings.HasSuffix(address, `.ico`) ||
-		strings.HasSuffix(address, `.php`)
+		strings.HasSuffix(address, `.php`) ||
+		strings.HasSuffix(address, `.gif`)
 }
 
 func AddFollowingSlashToUrl(url string) string {

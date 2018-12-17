@@ -23,8 +23,9 @@ func main() {
 	//url := "http://example.com/"
 	//url := "https://www.study.ua/q/"
 	//url := "https://www.study.ua/q/#"
-	url := "https://www.study.ua/"
+	//url := "https://www.study.ua/"
 	//url := "https://www.lina-ammor.com/"
+	url := "http://www.araks.ua/"
 
 	includeSubdomains := false
 

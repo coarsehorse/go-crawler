@@ -191,7 +191,6 @@ func ParsePage(url string) (CrawledPage, error) {
 
 func worker(id int, tasks <-chan string, results chan<- CrawledPage) {
 	for t := range tasks {
-		log.Print("[worker-", id, "]\t", "Starting crawl ", t)
 		cp, err := ParsePage(t)
 		if err != nil {
 			results <- CrawledPage{}
@@ -214,18 +213,6 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 
 	notGotPages := 0
 	crawledPages := make([]CrawledPage, 0)
-	/*for _, link := range linksToCrawl {
-		page, err := ParsePage(link)
-		if err != nil {
-			notGotPages++
-		} else {
-			crawledPages = append(crawledPages, page)
-		}
-		crawledLinks = append(crawledLinks, link)
-		if link != page.Url { // if request was redirected
-			crawledLinks = append(crawledLinks, page.Url)
-		}
-	}*/
 
 	// Define channels
 	tasksCh := make(chan string)
@@ -247,7 +234,6 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 	}()
 
 	// Waiting for results
-	//for i := 0; i < len(linksToCrawl); i++ {
 	for range linksToCrawl {
 		crawledPage := <-resultsCh
 		if crawledPage.IsEmpty() {
@@ -334,7 +320,8 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 
 		return !(strings.HasSuffix(link, `.png`) ||
 			strings.HasSuffix(link, `.jpg`) ||
-			strings.HasSuffix(link, `.jpeg`))
+			strings.HasSuffix(link, `.jpeg`)) ||
+			strings.HasSuffix(link, `.gif`)
 	})
 
 	// Convert crawledLinks to map to be able to search in it
