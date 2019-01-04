@@ -55,9 +55,12 @@ func main() {
 
 				// Perform a task
 				start := time.Now() // get start time
+				linksToCrawl := []string{taskUrl}
 				sitemap, err := crawler.GetLinksFromSitemap(taskUrl)
-				utils.CheckError(err)
-				linksToCrawl := utils.UniqueStringSlice(append(sitemap, taskUrl))
+				if err == nil {
+					linksToCrawl = utils.UniqueStringSlice(append(sitemap, taskUrl))
+				}
+
 				crawledLevels := crawler.Crawl(linksToCrawl, []string{},
 					[]crawler.CrawledLevel{}, task.IncludeSubdomains)
 				end := time.Now()                                      // get end time

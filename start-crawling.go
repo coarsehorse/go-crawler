@@ -40,9 +40,12 @@ func main() {
 	start := time.Now()
 
 	// Read sitemap
+	linksToCrawl := make([]string, 0)
+
 	sitemap, err := crawler.GetLinksFromSitemap(url)
-	utils.CheckError(err)
-	linksToCrawl := utils.UniqueStringSlice(append(sitemap, url))
+	if err == nil {
+		linksToCrawl = utils.UniqueStringSlice(append(sitemap, url))
+	}
 	// Crawl specified url
 	crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{}, includeSubdomains)
 
