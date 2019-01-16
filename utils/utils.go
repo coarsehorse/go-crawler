@@ -171,3 +171,16 @@ func IsUrl(url string) bool {
 
 	return r.MatchString(url)
 }
+
+func RemoveEmptyStrings(strs []string) []string {
+	temp := make([]string, 0)
+
+	for _, str := range strs {
+		if strings.TrimSpace(str) == `` {
+			continue
+		}
+		temp = append(temp, str)
+	}
+
+	return temp
+}

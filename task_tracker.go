@@ -69,6 +69,7 @@ func main() {
 
 				// Update crawled link estimation table
 				crawledLinks := crawler.ExtractUniqueLinks(crawledLevels)
+				crawledLinks = utils.RemoveEmptyStrings(crawledLinks)
 				sort.Slice(crawledLinks[:], func(i, j int) bool {
 					return crawledLinks[i] < crawledLinks[j]
 				})
