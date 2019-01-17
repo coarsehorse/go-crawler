@@ -166,7 +166,7 @@ func ExtractUrlBeforeQuestMark(url string) string {
 }
 
 func IsUrl(url string) bool {
-	urlPattern := `^https?://(.*)$`
+	urlPattern := `^https?://.+\..+$`
 	r := regexp.MustCompile(urlPattern)
 
 	return r.MatchString(url)

@@ -5,6 +5,7 @@ import (
 	"go-crawler/crawler"
 	"go-crawler/utils"
 	"log"
+	"os"
 	"strings"
 	"time"
 )
@@ -15,7 +16,7 @@ const (
 
 func main() {
 	// Input variations
-	//url := "https://beteastsports.com/"
+	url := "https://beteastsports.com/"
 	//url := "https://www.sportintan.com/"
 	//url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
@@ -25,7 +26,8 @@ func main() {
 	//url := "https://www.study.ua/q/#"
 	//url := "https://www.study.ua/"
 	//url := "https://www.lina-ammor.com/"
-	url := "http://www.araks.ua/"
+	//url := "http://www.araks.ua/"
+	//url := "http://asdasda"
 
 	includeSubdomains := false
 
@@ -39,8 +41,14 @@ func main() {
 	// Check time
 	start := time.Now()
 
+	// Check the input
+	if !utils.IsUrl(url) {
+		log.Println("This is not url: " + url + " skipping...")
+		os.Exit(1)
+	}
+
 	// Read sitemap
-	linksToCrawl := make([]string, 0)
+	linksToCrawl := []string{url}
 
 	sitemap, err := crawler.GetLinksFromSitemap(url)
 	if err == nil {
