@@ -5,8 +5,10 @@ import (
 	"go-crawler/crawler"
 	"go-crawler/dao/mysqldao"
 	"go-crawler/utils"
+	"go-crawler/validator"
 	"log"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -53,16 +55,45 @@ func main() {
 					continue
 				}
 
+				// Construct validator from task string rules
+				var exceptions []string
+				if task.Exceptions.Valid {
+					exceptions = strings.Split(task.Exceptions.String, "\n")
+					exceptions = utils.TrimArray(exceptions)
+				}
+
+				var allowances []string
+				if task.Allowances.Valid {
+					allowances = strings.Split(task.Allowances.String, "\n")
+					allowances = utils.TrimArray(allowances)
+				}
+
+				taskValidator := validator.NewValidator(exceptions, allowances)
+				log.Println("[task_tracker]\tValidation rules: ", taskValidator, ", task id: ", task.Id)
+
 				// Perform a task
 				start := time.Now() // get start time
+
 				linksToCrawl := []string{taskUrl}
+				// Read the sitemap
 				sitemap, err := crawler.GetLinksFromSitemap(taskUrl)
 				if err == nil {
 					linksToCrawl = utils.UniqueStringSlice(append(sitemap, taskUrl))
 				}
 
+				// First time validation(there are random number of links in the sitemap.xml)
+				// Validate linksToCrawl
+				linksToCrawl = utils.FilterSlice(linksToCrawl, func(link string) bool {
+					return taskValidator.IsValid(link)
+				})
+				// Validate with domain pattern, subdomains handled
+				domain := utils.ExtractDomain(taskUrl)
+				linksToCrawl = utils.FilterLinksNotInDomain(domain, linksToCrawl, task.IncludeSubdomains)
+				// Filter out image links
+				linksToCrawl = utils.FilterLinksToImages(linksToCrawl)
+
 				crawledLevels := crawler.Crawl(linksToCrawl, []string{},
-					[]crawler.CrawledLevel{}, task.IncludeSubdomains)
+					[]crawler.CrawledLevel{}, task.IncludeSubdomains, taskValidator)
 				end := time.Now()                                      // get end time
 				executionTimeMs := end.Sub(start).Nanoseconds() / 1E+6 // evaluate execution time
 				log.Print("[task_tracker]\tCrawling task was performed, task id: ", task.Id)

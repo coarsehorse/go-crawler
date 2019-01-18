@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/PuerkitoBio/goquery"
 	"go-crawler/utils"
+	"go-crawler/validator"
 	"log"
 	"net/http"
 	"regexp"
@@ -201,7 +202,7 @@ func worker(id int, tasks <-chan string, results chan<- CrawledPage) {
 }
 
 func Crawl(linksToCrawl []string, crawledLinks []string,
-	crawledLevels []CrawledLevel, includeSubdomains bool) []CrawledLevel {
+	crawledLevels []CrawledLevel, includeSubdomains bool, validator validator.Validator) []CrawledLevel {
 	log.Print("[crawler]\tStarting crawl ", len(linksToCrawl), " links")
 
 	// To be sure that all links to crawl has following '/'
@@ -295,34 +296,15 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 
 	// Remove duplicates
 	nextLevelLinks = utils.UniqueStringSlice(nextLevelLinks)
-
+	// Validate nextLevelLinks
+	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
+		return validator.IsValid(link)
+	})
 	// Validate with domain pattern, subdomains handled
 	domain := utils.ExtractDomain(linksToCrawl[0])
-	domainParts := strings.Split(domain, `.`)
-	domainWithoutSubdoms := strings.Join(domainParts[len(domainParts)-2:len(domainParts)], `.`)
-	var domainPattern string
-	if includeSubdomains {
-		domainPattern = `^https?:\/\/([-\w\d]+\.)*` +
-			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
-	} else { // www - exception, it treated as no subdomain
-		domainPattern = `^https?:\/\/(www\.)?` +
-			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
-	}
-	r := regexp.MustCompile(domainPattern)
-
-	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
-		return r.MatchString(link) // validate link with domainPattern
-	})
-
+	nextLevelLinks = utils.FilterLinksNotInDomain(domain, nextLevelLinks, includeSubdomains)
 	// Filter out image links
-	nextLevelLinks = utils.FilterSlice(nextLevelLinks, func(link string) bool {
-		link = strings.ToLower(link)
-
-		return !(strings.HasSuffix(link, `.png`) ||
-			strings.HasSuffix(link, `.jpg`) ||
-			strings.HasSuffix(link, `.jpeg`)) ||
-			strings.HasSuffix(link, `.gif`)
-	})
+	nextLevelLinks = utils.FilterLinksToImages(nextLevelLinks)
 
 	// Convert crawledLinks to map to be able to search in it
 	crawledMap := make(map[string]struct{}, len(crawledLinks))
@@ -341,7 +323,7 @@ func Crawl(linksToCrawl []string, crawledLinks []string,
 	if len(remainingLinks) == 0 { // crawling is done
 		return crawledLevels
 	} else {
-		return Crawl(remainingLinks, crawledLinks, crawledLevels, includeSubdomains) // crawl next level
+		return Crawl(remainingLinks, crawledLinks, crawledLevels, includeSubdomains, validator) // crawl next level
 	}
 }
 

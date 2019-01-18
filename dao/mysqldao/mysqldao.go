@@ -31,12 +31,14 @@ const (
 )
 
 type CrawlingTask struct {
-	Id                int    `json:"id"`
-	IdEstimator       int    `json:"idEstimator"`
-	Url               string `json:"url"`
-	IncludeSubdomains bool   `json:"IncludeSubdomains"`
-	Status            string `json:"status"`
-	Hidden            bool   `json:"hidden"`
+	Id                int            `json:"id"`
+	IdEstimator       int            `json:"idEstimator"`
+	Url               string         `json:"url"`
+	IncludeSubdomains bool           `json:"includeSubdomains"`
+	Exceptions        sql.NullString `json:"exceptions"`
+	Allowances        sql.NullString `json:"allowances"`
+	Status            string         `json:"status"`
+	Hidden            bool           `json:"hidden"`
 }
 
 type Estimation struct {
@@ -130,7 +132,8 @@ func GetActiveTasks(conn *sql.DB) (activeTasks []CrawlingTask, err error) {
 	// Map data to CrawlingTask objects
 	for tasks.Next() {
 		task := CrawlingTask{}
-		err = tasks.Scan(&task.Id, &task.IdEstimator, &task.Url, &task.IncludeSubdomains, &task.Status, &task.Hidden)
+		err = tasks.Scan(&task.Id, &task.IdEstimator, &task.Url, &task.IncludeSubdomains,
+			&task.Exceptions, &task.Allowances, &task.Status, &task.Hidden)
 		if err != nil {
 			return nil, err
 		}
@@ -150,6 +153,8 @@ func UpdateCrawlingTaskById(task CrawlingTask, conn *sql.DB) (err error) {
 		"id_estimator=?, " +
 		"url=?, " +
 		"include_subdomains=?, " +
+		"exceptions=?, " +
+		"allowances=?, " +
 		"status=?, " +
 		"hidden=? " +
 		"WHERE id=?")
@@ -157,7 +162,8 @@ func UpdateCrawlingTaskById(task CrawlingTask, conn *sql.DB) (err error) {
 		return err
 	}
 
-	_, err = stmt.Exec(task.IdEstimator, task.Url, task.IncludeSubdomains, task.Status, task.Hidden, task.Id)
+	_, err = stmt.Exec(task.IdEstimator, task.Url, task.IncludeSubdomains,
+		task.Exceptions, task.Allowances, task.Status, task.Hidden, task.Id)
 	if err != nil {
 		return err
 	}

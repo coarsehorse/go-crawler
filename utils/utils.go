@@ -172,15 +172,52 @@ func IsUrl(url string) bool {
 	return r.MatchString(url)
 }
 
-func RemoveEmptyStrings(strs []string) []string {
-	temp := make([]string, 0)
-
+func RemoveEmptyStrings(strs []string) (noEmpty []string) {
 	for _, str := range strs {
 		if strings.TrimSpace(str) == `` {
 			continue
 		}
-		temp = append(temp, str)
+		noEmpty = append(noEmpty, str)
 	}
 
-	return temp
+	return noEmpty
+}
+
+func TrimArray(strs []string) (trimmed []string) {
+	for _, str := range strs {
+		trimmed = append(trimmed, strings.TrimSpace(str))
+	}
+
+	return trimmed
+}
+
+func FilterLinksNotInDomain(domain string, links []string, includeSubdomains bool) (filtered []string) {
+	domainParts := strings.Split(domain, `.`)
+	domainWithoutSubdoms := strings.Join(domainParts[len(domainParts)-2:len(domainParts)], `.`)
+
+	var domainPattern string
+	if includeSubdomains {
+		domainPattern = `^https?:\/\/([-\w\d]+\.)*` +
+			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	} else { // www - exception, it treated as no subdomain
+		domainPattern = `^https?:\/\/(www\.)?` +
+			strings.Replace(domainWithoutSubdoms, `.`, `\.`, -1) + `\/.*$`
+	}
+	r := regexp.MustCompile(domainPattern)
+
+	return FilterSlice(links, func(link string) bool {
+		return r.MatchString(link) // validate link with domainPattern
+	})
+}
+
+func FilterLinksToImages(links []string) (filtered []string) {
+	return FilterSlice(links, func(link string) bool {
+		link = strings.ToLower(link)
+
+		return !(strings.HasSuffix(link, `.png`) ||
+			strings.HasSuffix(link, `.jpg`) ||
+			strings.HasSuffix(link, `.jpeg`) ||
+			strings.HasSuffix(link, `.gif`) ||
+			strings.HasSuffix(link, `.ico`))
+	})
 }

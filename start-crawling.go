@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"go-crawler/crawler"
 	"go-crawler/utils"
+	"go-crawler/validator"
 	"log"
 	"os"
 	"strings"
@@ -16,8 +17,8 @@ const (
 
 func main() {
 	// Input variations
-	url := "https://beteastsports.com/"
-	//url := "https://www.sportintan.com/"
+	//url := "https://beteastsports.com/"
+	url := "https://www.sportintan.com/"
 	//url := "https://ampmlimo.ca/"
 	//url := "https://www.polygon.com/playstation"
 	//url := "https://mediglobus.com/"
@@ -30,6 +31,7 @@ func main() {
 	//url := "http://asdasda"
 
 	includeSubdomains := false
+	validtr := validator.NewValidator([]string{}, []string{})
 
 	// Initialize logger
 	/*logFilename, err := os.OpenFile(LOG_FILENAME, os.O_CREATE|os.O_APPEND, 0644)
@@ -55,7 +57,7 @@ func main() {
 		linksToCrawl = utils.UniqueStringSlice(append(sitemap, url))
 	}
 	// Crawl specified url
-	crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{}, includeSubdomains)
+	crawledLevels := crawler.Crawl(linksToCrawl, []string{}, []crawler.CrawledLevel{}, includeSubdomains, validtr)
 
 	// Get execution time in ms
 	executionTime := time.Now().Sub(start).Nanoseconds() / 1E+6
