@@ -1,0 +1,2 @@
+# Go crawler
+Multithreaded Go crawler. Working in two mods. First mode is manual running the start-crawling.go every time you need to crawl something. It will start crawling the url specified in main() function. The second mode is about getting crawling tasks from the web gui. The web gui is posting task into MySQL db. After start task_tracker.go listening new tasks from db, processing it and putting results back to the db. The second mode was used for crawling service.
